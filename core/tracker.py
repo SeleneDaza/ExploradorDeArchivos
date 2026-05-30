@@ -3,7 +3,7 @@ import hashlib
 import time
 import pickle
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 import fnmatch
 import re
 
@@ -99,7 +99,9 @@ def compute_hash(path: str, chunk_size: int = 1024 * 1024) -> str:
 
 def find_duplicates(target_path: str, roots: Optional[List[str]] = None,
                     exclude_dirs: Optional[List[str]] = None,
-                    exclude_file_patterns: Optional[List[str]] = None) -> List[Dict]:
+                    exclude_file_patterns: Optional[List[str]] = None,
+                    cancel_checker: Optional[Callable[[], bool]] = None,
+                    progress_callback: Optional[Callable[[int], None]] = None) -> List[Dict]:
     target = Path(target_path)
     if not target.exists() or not target.is_file():
         return []
@@ -121,33 +123,57 @@ def find_duplicates(target_path: str, roots: Optional[List[str]] = None,
         # default to user's home folder
         roots = [str(Path.home())]
 
-    results = []
+    # First pass: build list of candidate files (matching size and not excluded)
+    candidates = []
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
             # prune dirnames according to exclude_dirs patterns/names
             dirnames[:] = [d for d in dirnames if not any(d == ex or fnmatch.fnmatch(d, ex) for ex in exclude_dirs)]
             for fname in filenames:
                 try:
-                    # skip file patterns
-                    if any(fnmatch.fnmatch(fname, pat) for pat in exclude_file_patterns):
-                        continue
-                    fpath = Path(dirpath) / fname
-                    # skip the same file
-                    if fpath.resolve() == target.resolve():
-                        continue
+                    # check cancellation
+                    if cancel_checker and cancel_checker():
+                        return []
+                except Exception:
+                    pass
+                # skip file patterns
+                if any(fnmatch.fnmatch(fname, pat) for pat in exclude_file_patterns):
+                    continue
+                fpath = Path(dirpath) / fname
+                try:
                     if not fpath.is_file():
+                        continue
+                    if fpath.resolve() == target.resolve():
                         continue
                     if fpath.stat().st_size != target_size:
                         continue
-                    # compute hash
-                    try:
-                        h = compute_hash(str(fpath))
-                    except Exception:
-                        continue
-                    if h == target_hash:
-                        results.append(_file_info(fpath))
+                    candidates.append(fpath)
                 except Exception:
                     continue
+
+    results = []
+    total = len(candidates)
+    processed = 0
+    for fpath in candidates:
+        try:
+            # check cancellation
+            if cancel_checker and cancel_checker():
+                return []
+            try:
+                h = compute_hash(str(fpath))
+            except Exception:
+                continue
+            if h == target_hash:
+                results.append(_file_info(fpath))
+        finally:
+            processed += 1
+            # report progress for duplicates (0-100)
+            try:
+                if progress_callback:
+                    pct = int((processed / total) * 100) if total else 100
+                    progress_callback(min(100, pct))
+            except Exception:
+                pass
 
     # include target as original at top
     final = [
@@ -287,7 +313,11 @@ def _parse_py_for_refs(fpath: Path, target: Path, roots: List[str]):
 def find_references(target_path: str, roots: Optional[List[str]] = None,
                     max_files: Optional[int] = None,
                     exclude_dirs: Optional[List[str]] = None,
-                    exclude_file_patterns: Optional[List[str]] = None) -> List[Dict]:
+                    exclude_file_patterns: Optional[List[str]] = None,
+                    cancel_checker: Optional[Callable[[], bool]] = None,
+                    progress_callback: Optional[Callable[[int], None]] = None) -> List[Dict]:
+                    
+    # cancel_checker is supported via keyword argument
     target = Path(target_path)
     if not target.exists() or not target.is_file():
         return []
@@ -307,59 +337,78 @@ def find_references(target_path: str, roots: Optional[List[str]] = None,
     if roots is None:
         roots = [str(Path.home())]
 
-    results = []
-    files_scanned = 0
+    # First pass: count candidate text files to scan (for progress estimation)
+    candidates = []
+    files_seen = 0
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
             # prune directories
             dirnames[:] = [d for d in dirnames if not any(d == ex or fnmatch.fnmatch(d, ex) for ex in exclude_dirs)]
             for fname in filenames:
-                # skip file patterns
+                try:
+                    if cancel_checker and cancel_checker():
+                        return []
+                except Exception:
+                    pass
                 if any(fnmatch.fnmatch(fname, pat) for pat in exclude_file_patterns):
                     continue
                 fpath = Path(dirpath) / fname
                 try:
                     if not fpath.is_file():
                         continue
-                    # optional limit
-                    files_scanned += 1
-                    if max_files and files_scanned > max_files:
+                    if max_files and files_seen >= max_files:
                         break
                     if not is_text_file(str(fpath)):
                         continue
-                    # try specialized parsers by extension
-                    ext = fpath.suffix.lower()
-                    parsed = []
-                    if ext in ['.html', '.htm']:
-                        parsed = _parse_html_for_refs(fpath, Path(target), roots)
-                    elif ext in ['.css']:
-                        parsed = _parse_css_for_refs(fpath, Path(target), roots)
-                    elif ext in ['.js', '.jsx', '.mjs']:
-                        parsed = _parse_js_for_refs(fpath, Path(target), roots)
-                    elif ext in ['.py']:
-                        parsed = _parse_py_for_refs(fpath, Path(target), roots)
-
-                    if parsed:
-                        results.extend(parsed)
-                        continue
-
-                    try:
-                        with open(str(fpath), "r", encoding="utf-8", errors="ignore") as fh:
-                            for i, line in enumerate(fh, start=1):
-                                if needle_basename in line or needle_full in line:
-                                    results.append({
-                                        "path": str(fpath),
-                                        "line": i,
-                                        "excerpt": line.strip(),
-                                    })
-                                    break
-                    except Exception:
-                        continue
+                    candidates.append(fpath)
+                    files_seen += 1
                 except Exception:
                     continue
             else:
                 continue
             break
+
+    results = []
+    total = len(candidates)
+    scanned = 0
+    for fpath in candidates:
+        try:
+            if cancel_checker and cancel_checker():
+                return results
+            ext = fpath.suffix.lower()
+            parsed = []
+            if ext in ['.html', '.htm']:
+                parsed = _parse_html_for_refs(fpath, Path(target), roots)
+            elif ext in ['.css']:
+                parsed = _parse_css_for_refs(fpath, Path(target), roots)
+            elif ext in ['.js', '.jsx', '.mjs']:
+                parsed = _parse_js_for_refs(fpath, Path(target), roots)
+            elif ext in ['.py']:
+                parsed = _parse_py_for_refs(fpath, Path(target), roots)
+
+            if parsed:
+                results.extend(parsed)
+            else:
+                try:
+                    with open(str(fpath), "r", encoding="utf-8", errors="ignore") as fh:
+                        for i, line in enumerate(fh, start=1):
+                            if needle_basename in line or needle_full in line:
+                                results.append({
+                                    "path": str(fpath),
+                                    "line": i,
+                                    "excerpt": line.strip(),
+                                })
+                                break
+                except Exception:
+                    pass
+        finally:
+            scanned += 1
+            try:
+                if progress_callback:
+                    pct = int((scanned / total) * 100) if total else 100
+                    progress_callback(min(100, pct))
+            except Exception:
+                pass
 
     _cache[key] = (now, results)
     _save_cache()

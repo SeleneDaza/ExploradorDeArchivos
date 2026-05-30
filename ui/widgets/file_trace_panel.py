@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QDockWidget, QWidget, QVBoxLayout, QLabel, QHBoxLayout,
+    QDialog, QVBoxLayout, QLabel, QHBoxLayout,
     QPushButton, QProgressBar, QListWidget, QListWidgetItem, QMessageBox
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
@@ -19,20 +19,25 @@ class TraceWorker(QThread):
     references_found = pyqtSignal(list)
     finished = pyqtSignal()
 
-    def __init__(self, target_path: str, roots=None, exclude_dirs=None, exclude_file_patterns=None):
+    def __init__(self, target_path: str, roots=None, exclude_dirs=None, exclude_file_patterns=None,
+                 dup_progress_cb=None, ref_progress_cb=None):
         super().__init__()
         self.target_path = target_path
         self.roots = roots
         self.exclude_dirs = exclude_dirs or []
         self.exclude_file_patterns = exclude_file_patterns or []
         self._stop = False
+        self.dup_progress_cb = dup_progress_cb
+        self.ref_progress_cb = ref_progress_cb
 
     def run(self):
         # Stage 1: duplicates
         self.progress.emit(5)
         dups = tracker.find_duplicates(self.target_path, roots=self.roots,
-                           exclude_dirs=self.exclude_dirs,
-                           exclude_file_patterns=self.exclude_file_patterns)
+                   exclude_dirs=self.exclude_dirs,
+                   exclude_file_patterns=self.exclude_file_patterns,
+                   cancel_checker=lambda: self._stop,
+                   progress_callback=(self.dup_progress_cb if hasattr(self, 'dup_progress_cb') else None))
         if self._stop:
             self.finished.emit()
             return
@@ -41,9 +46,11 @@ class TraceWorker(QThread):
 
         # Stage 2: references (may be expensive)
         refs = tracker.find_references(self.target_path, roots=self.roots,
-                           max_files=None,
-                           exclude_dirs=self.exclude_dirs,
-                           exclude_file_patterns=self.exclude_file_patterns)
+                   max_files=None,
+                   exclude_dirs=self.exclude_dirs,
+                   exclude_file_patterns=self.exclude_file_patterns,
+                   cancel_checker=lambda: self._stop,
+                   progress_callback=(self.ref_progress_cb if hasattr(self, 'ref_progress_cb') else None))
         if self._stop:
             self.finished.emit()
             return
@@ -55,13 +62,12 @@ class TraceWorker(QThread):
         self._stop = True
 
 
-class FileTracePanel(QDockWidget):
+class FileTracePanel(QDialog):
     def __init__(self, parent=None):
-        super().__init__("Rastreo de Archivo", parent)
-        self.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
-        self.widget = QWidget()
-        self.setWidget(self.widget)
-        self.layout = QVBoxLayout(self.widget)
+        super().__init__(parent)
+        self.setWindowTitle("Rastreo de Archivo")
+        self.resize(640, 480)
+        self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(8, 8, 8, 8)
 
         # Header info
@@ -96,8 +102,11 @@ class FileTracePanel(QDockWidget):
         # actions
         self.btn_clear = QPushButton("Limpiar")
         self.btn_config = QPushButton("Configurar")
-        self.layout.addWidget(self.btn_clear)
-        self.layout.addWidget(self.btn_config)
+        h_actions = QHBoxLayout()
+        h_actions.addWidget(self.btn_clear)
+        h_actions.addStretch()
+        h_actions.addWidget(self.btn_config)
+        self.layout.addLayout(h_actions)
 
         self.worker = None
         self.target = None
@@ -145,14 +154,31 @@ class FileTracePanel(QDockWidget):
         self.progress.setValue(0)
         self.btn_cancel.setEnabled(True)
 
+        # start worker thread with progress mapping: duplicates 0-60, refs 60-100
+        def dup_progress(p):
+            try:
+                self.progress.setValue(int(p * 0.6))
+            except Exception:
+                pass
+
+        def ref_progress(p):
+            try:
+                self.progress.setValue(60 + int(p * 0.4))
+            except Exception:
+                pass
+
         # start worker thread
         self.worker = TraceWorker(path, roots=self.roots,
-                                  exclude_dirs=self.exclude_dirs,
-                                  exclude_file_patterns=self.exclude_file_patterns)
+                      exclude_dirs=self.exclude_dirs,
+                      exclude_file_patterns=self.exclude_file_patterns,
+                      dup_progress_cb=dup_progress,
+                      ref_progress_cb=ref_progress)
+        # TraceWorker will emit coarse progress; we also pass callbacks below
         self.worker.progress.connect(self.progress.setValue)
         self.worker.duplicates_found.connect(self._on_duplicates)
         self.worker.references_found.connect(self._on_references)
         self.worker.finished.connect(self._on_finished)
+        # (TraceWorker will call tracker with progress callbacks)
         self.worker.start()
 
     def _on_duplicates(self, dups_list):
@@ -171,6 +197,8 @@ class FileTracePanel(QDockWidget):
         self._update_summary(dups=len(dups_list))
 
     def _on_references(self, refs_list):
+        # store refs
+        self._refs = refs_list
         self.list_widget.addItem("--- Referencias ---")
         for r in refs_list:
             text = f"{Path(r['path']).name} — {r['path']} (línea {r.get('line', '?')})"
@@ -180,8 +208,21 @@ class FileTracePanel(QDockWidget):
         self._update_summary(refs=len(refs_list))
 
     def _on_finished(self):
+        # called when worker finishes both phases
         self.btn_cancel.setEnabled(False)
+        # if no duplicates besides original and no references -> clear message
+        dups_count = len(getattr(self, 'duplicates', []) or [])
+        refs_count = len(getattr(self, '_refs', []) or [])
+        if dups_count <= 1 and refs_count == 0:
+            self.list_widget.clear()
+            self.list_widget.addItem("No se encontró uso en otros archivos.")
+            self.label_summary.setText("No se está utilizando en ningún otro lugar")
+            self.progress.setValue(100)
+            return
         self.label_summary.setText(self.label_summary.text() + " — terminado")
+
+
+    
 
     def _on_cancel(self):
         if self.worker and self.worker.isRunning():
@@ -257,18 +298,6 @@ class FileTracePanel(QDockWidget):
             self.exclude_file_patterns = s.get('exclude_file_patterns', getattr(self, 'exclude_file_patterns', []))
             # reflect in UI
             self._on_clear()
-        elif clicked == delete_btn:
-            reply = QMessageBox.question(self, "Eliminar", f"Eliminar '{Path(path).name}'?", QMessageBox.Yes | QMessageBox.No)
-            if reply == QMessageBox.Yes:
-                try:
-                    if Path(path).is_dir():
-                        import shutil
-                        shutil.rmtree(path)
-                    else:
-                        Path(path).unlink()
-                    QMessageBox.information(self, "Eliminado", "Elemento eliminado")
-                except Exception as e:
-                    QMessageBox.warning(self, "Error", f"No se pudo eliminar: {e}")
 
     def _update_summary(self, dups=0, refs=0):
         # simplistic counters

@@ -11,7 +11,6 @@ from ui.toolbar import Toolbar
 from ui.file_tree import FileTree
 from ui.widgets.favorites_panel import FavoritesPanel
 from ui.widgets.search_bar import SearchBar
-from ui.widgets.file_trace_panel import FileTracePanel
 from pathlib import Path
 
 DARK = {
@@ -136,9 +135,7 @@ class MainWindow(QMainWindow):
         self.file_tree.list_view.doubleClicked.connect(self._on_double_click)
         content_splitter.addWidget(self.file_tree)
 
-        # panel de rastreo (dock)
-        self.trace_panel = FileTracePanel(parent=self)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.trace_panel)
+        # panel de rastreo: ahora se muestra como diálogo emergente al solicitarse
 
         content_splitter.setSizes([180, 820])
         main_layout.addWidget(content_splitter)
@@ -305,14 +302,16 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Error", result["error"])
 
     def _start_trace(self, path: str):
-        # ensure panel is visible and start tracing
+        # open a modal dialog for tracing the selected file
         try:
-            self.trace_panel.show()
+            from ui.widgets.file_trace_panel import FileTracePanel
+            dlg = FileTracePanel(parent=self)
             # search roots: limit to current workspace folder and home for speed
             roots = [self.fs.get_current_path(), str(Path.home())]
             exclude_dirs = ['.git', 'node_modules', '__pycache__', '.venv', 'venv']
             exclude_file_patterns = ['*.pyc', '*.pyo', '*.class', '*.exe']
-            self.trace_panel.start_trace(path, roots=roots, exclude_dirs=exclude_dirs, exclude_file_patterns=exclude_file_patterns)
+            dlg.start_trace(path, roots=roots, exclude_dirs=exclude_dirs, exclude_file_patterns=exclude_file_patterns)
+            dlg.exec_()
         except Exception as e:
             QMessageBox.warning(self, "Error", f"No se pudo iniciar el rastreo: {e}")
 
