@@ -5,6 +5,7 @@ import pickle
 from pathlib import Path
 from typing import List, Dict, Optional
 import fnmatch
+import re
 
 # Simple in-memory cache: key -> (timestamp, result)
 _cache = {}
@@ -139,6 +140,113 @@ def is_text_file(path: str) -> bool:
         return False
 
 
+def _resolve_reference_path(ref: str, base_dir: Path, roots: List[str]) -> Optional[Path]:
+    # clean ref
+    ref = ref.strip().strip('"\'')
+    if not ref:
+        return None
+    p = Path(ref)
+    # absolute-like (starts with /): try under each root
+    if ref.startswith('/'):
+        for r in roots:
+            candidate = Path(r) / ref.lstrip('/')
+            if candidate.exists():
+                return candidate.resolve()
+        return None
+    # relative path
+    candidate = (base_dir / ref).resolve()
+    if candidate.exists():
+        return candidate
+    # try joining and normalizing (remove query strings or anchors)
+    clean = ref.split('?')[0].split('#')[0]
+    candidate = (base_dir / clean).resolve()
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def _parse_html_for_refs(fpath: Path, target: Path, roots: List[str]):
+    results = []
+    try:
+        with fpath.open('r', encoding='utf-8', errors='ignore') as fh:
+            for i, line in enumerate(fh, start=1):
+                # find src/href attributes
+                for m in re.findall(r'(?:src|href)\s*=\s*["\']([^"\']+)["\']', line, flags=re.IGNORECASE):
+                    resolved = _resolve_reference_path(m, fpath.parent, roots)
+                    if resolved and resolved == target:
+                        results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+                        break
+                # also check <img srcset=> (comma separated)
+                for m in re.findall(r'srcset\s*=\s*["\']([^"\']+)["\']', line, flags=re.IGNORECASE):
+                    parts = [p.split()[0] for p in m.split(',') if p.strip()]
+                    for part in parts:
+                        resolved = _resolve_reference_path(part, fpath.parent, roots)
+                        if resolved and resolved == target:
+                            results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+                            break
+    except Exception:
+        pass
+    return results
+
+
+def _parse_css_for_refs(fpath: Path, target: Path, roots: List[str]):
+    results = []
+    try:
+        with fpath.open('r', encoding='utf-8', errors='ignore') as fh:
+            for i, line in enumerate(fh, start=1):
+                for m in re.findall(r'url\(([^)]+)\)', line, flags=re.IGNORECASE):
+                    m = m.strip().strip('"\'')
+                    resolved = _resolve_reference_path(m, fpath.parent, roots)
+                    if resolved and resolved == target:
+                        results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+                for m in re.findall(r'@import\s+["\']([^"\']+)["\']', line, flags=re.IGNORECASE):
+                    resolved = _resolve_reference_path(m, fpath.parent, roots)
+                    if resolved and resolved == target:
+                        results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+    except Exception:
+        pass
+    return results
+
+
+def _parse_js_for_refs(fpath: Path, target: Path, roots: List[str]):
+    results = []
+    try:
+        with fpath.open('r', encoding='utf-8', errors='ignore') as fh:
+            for i, line in enumerate(fh, start=1):
+                # import ... from '...'
+                for m in re.findall(r'import[^;]*from\s+["\']([^"\']+)["\']', line):
+                    resolved = _resolve_reference_path(m, fpath.parent, roots)
+                    if resolved and resolved == target:
+                        results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+                # require('...')
+                for m in re.findall(r'require\(\s*["\']([^"\']+)["\']\s*\)', line):
+                    resolved = _resolve_reference_path(m, fpath.parent, roots)
+                    if resolved and resolved == target:
+                        results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+    except Exception:
+        pass
+    return results
+
+
+def _parse_py_for_refs(fpath: Path, target: Path, roots: List[str]):
+    results = []
+    try:
+        with fpath.open('r', encoding='utf-8', errors='ignore') as fh:
+            for i, line in enumerate(fh, start=1):
+                # look for open('path') or Path('...') or literal filename
+                for m in re.findall(r"open\(\s*[\"']([^\"']+)[\"']", line):
+                    resolved = _resolve_reference_path(m, fpath.parent, roots)
+                    if resolved and resolved == target:
+                        results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+                for m in re.findall(r"Path\(\s*[\"']([^\"']+)[\"']\s*\)", line):
+                    resolved = _resolve_reference_path(m, fpath.parent, roots)
+                    if resolved and resolved == target:
+                        results.append({'path': str(fpath), 'line': i, 'excerpt': line.strip()})
+    except Exception:
+        pass
+    return results
+
+
 def find_references(target_path: str, roots: Optional[List[str]] = None,
                     max_files: Optional[int] = None,
                     exclude_dirs: Optional[List[str]] = None,
@@ -182,6 +290,22 @@ def find_references(target_path: str, roots: Optional[List[str]] = None,
                         break
                     if not is_text_file(str(fpath)):
                         continue
+                    # try specialized parsers by extension
+                    ext = fpath.suffix.lower()
+                    parsed = []
+                    if ext in ['.html', '.htm']:
+                        parsed = _parse_html_for_refs(fpath, Path(target), roots)
+                    elif ext in ['.css']:
+                        parsed = _parse_css_for_refs(fpath, Path(target), roots)
+                    elif ext in ['.js', '.jsx', '.mjs']:
+                        parsed = _parse_js_for_refs(fpath, Path(target), roots)
+                    elif ext in ['.py']:
+                        parsed = _parse_py_for_refs(fpath, Path(target), roots)
+
+                    if parsed:
+                        results.extend(parsed)
+                        continue
+
                     try:
                         with open(str(fpath), "r", encoding="utf-8", errors="ignore") as fh:
                             for i, line in enumerate(fh, start=1):
