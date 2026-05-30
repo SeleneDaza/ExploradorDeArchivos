@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from core import tracker
+from ui.dialogs.compare_dialog import CompareDialog
 
 
 class TraceWorker(QThread):
@@ -148,9 +149,15 @@ class FileTracePanel(QDockWidget):
 
     def _on_duplicates(self, dups_list):
         # populate duplicates section
+        self.duplicates = dups_list
         self.list_widget.addItem("--- Duplicados ---")
+        self.original_path = None
         for d in dups_list:
-            item = QListWidgetItem(f"{Path(d['path']).name} — {d['path']}")
+            label = f"{Path(d['path']).name} — {d['path']}"
+            if d.get('is_original'):
+                label += "  (original)"
+                self.original_path = d.get('path')
+            item = QListWidgetItem(label)
             item.setData(Qt.UserRole, d)
             self.list_widget.addItem(item)
         self._update_summary(dups=len(dups_list))
@@ -194,6 +201,10 @@ class FileTracePanel(QDockWidget):
         open_btn = menu.addButton("Abrir archivo", QMessageBox.AcceptRole)
         open_folder = menu.addButton("Abrir carpeta contenedora", QMessageBox.ActionRole)
         copy_path = menu.addButton("Copiar ruta", QMessageBox.ActionRole)
+        # compare with original when applicable
+        compare_btn = None
+        if hasattr(self, 'original_path') and self.original_path and path != self.original_path:
+            compare_btn = menu.addButton("Comparar con original", QMessageBox.ActionRole)
         delete_btn = menu.addButton("Eliminar", QMessageBox.DestructiveRole)
         cancel_btn = menu.addButton("Cancelar", QMessageBox.RejectRole)
         menu.exec_()
@@ -221,6 +232,12 @@ class FileTracePanel(QDockWidget):
                 QApplication.clipboard().setText(path)
             except Exception:
                 pass
+        elif compare_btn and clicked == compare_btn:
+            try:
+                dialog = CompareDialog(self.original_path, path, parent=self)
+                dialog.exec_()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"No se pudo comparar: {e}")
         elif clicked == delete_btn:
             reply = QMessageBox.question(self, "Eliminar", f"Eliminar '{Path(path).name}'?", QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
