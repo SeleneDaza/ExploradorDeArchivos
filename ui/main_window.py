@@ -11,6 +11,8 @@ from ui.toolbar import Toolbar
 from ui.file_tree import FileTree
 from ui.widgets.favorites_panel import FavoritesPanel
 from ui.widgets.search_bar import SearchBar
+from ui.widgets.file_trace_panel import FileTracePanel
+from pathlib import Path
 
 DARK = {
     "bg":          "#1e1e2e",
@@ -134,6 +136,10 @@ class MainWindow(QMainWindow):
         self.file_tree.list_view.doubleClicked.connect(self._on_double_click)
         content_splitter.addWidget(self.file_tree)
 
+        # panel de rastreo (dock)
+        self.trace_panel = FileTracePanel(parent=self)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.trace_panel)
+
         content_splitter.setSizes([180, 820])
         main_layout.addWidget(content_splitter)
 
@@ -228,6 +234,11 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
 
         if selected:
+            # add rastreo de archivo for files
+            from pathlib import Path
+            if Path(selected).is_file():
+                menu.addAction("🔍  Rastrear uso del archivo", lambda: self._start_trace(selected))
+
             menu.addAction("✏   Renombrar",   lambda: self._rename(selected))
             menu.addAction("📋  Copiar",       lambda: self._copy(selected))
             menu.addAction("✂   Mover",        lambda: self._move(selected))
@@ -292,6 +303,16 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"   ✅  {result['result']}")
         else:
             QMessageBox.warning(self, "Error", result["error"])
+
+    def _start_trace(self, path: str):
+        # ensure panel is visible and start tracing
+        try:
+            self.trace_panel.show()
+            # search roots: limit to current workspace folder and home for speed
+            roots = [self.fs.get_current_path(), str(Path.home())]
+            self.trace_panel.start_trace(path, roots=roots)
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"No se pudo iniciar el rastreo: {e}")
 
     def toggle_theme(self):
         self.is_dark = not getattr(self, 'is_dark', True)
