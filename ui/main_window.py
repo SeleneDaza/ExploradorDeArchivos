@@ -221,6 +221,12 @@ class MainWindow(QMainWindow):
         self.toolbar.set_path(path)
         self.breadcrumb.set_path(path)
         self.status.showMessage(f"   {path}")
+        # agrega al historial
+        if not self.history or self.history[self.history_index] != path:
+            if self.history_index < len(self.history) - 1:
+                self.history = self.history[:self.history_index + 1]
+            self.history.append(path)
+            self.history_index = len(self.history) - 1
 
     def _on_breadcrumb_clicked(self, path: str):
         self._navigate(path)
@@ -234,21 +240,12 @@ class MainWindow(QMainWindow):
     # ── búsqueda ─────────────────────────────────────────────
 
     def _on_search(self, query: str):
-        from pathlib import Path
-        current = Path(self.fs.get_current_path())
-        results = [
-            str(p) for p in current.iterdir()
-            if query.lower() in p.name.lower()
-        ]
-        if results:
-            self.status.showMessage(f"   🔍 {len(results)} resultado(s) para '{query}'")
-            self.file_tree.list_model.setNameFilters([f"*{query}*"])
-            self.file_tree.list_model.setNameFilterDisables(False)
-        else:
-            self.status.showMessage(f"   🔍 Sin resultados para '{query}'")
+        self.file_tree.list_model.setNameFilters([f"*{query}*"])
+        self.file_tree.list_model.setNameFilterDisables(False)
+        self.status.showMessage(f"   🔍 Buscando '{query}'")
 
     def _on_search_cleared(self):
-        self.file_tree.list_model.setNameFilters([])
+        self.file_tree.list_model.setNameFilters(["*"])
         self.file_tree.list_model.setNameFilterDisables(True)
         self.status.showMessage(f"   {self.fs.get_current_path()}")
 
