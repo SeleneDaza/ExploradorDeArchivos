@@ -50,7 +50,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Explorador de Archivos")
         self.setMinimumSize(1000, 650)
         self._build_ui()
-        self.file_tree.navigate_to(self.fs.get_home())
+        # Navegar al mismo path que usa el botón Home
+        self._go_home()
 
     def _build_ui(self):
         self.setStyleSheet(f"""
@@ -173,7 +174,6 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # toolbar
         self.toolbar = Toolbar(
             on_up=self._go_up,
             on_home=self._go_home,
@@ -201,7 +201,6 @@ class MainWindow(QMainWindow):
         self.file_tree.list_view.customContextMenuRequested.connect(self._context_menu)
         layout.addWidget(self.file_tree)
 
-        # status bar
         self.status = QStatusBar()
         self.setStatusBar(self.status)
 
