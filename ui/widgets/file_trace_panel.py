@@ -10,6 +10,7 @@ from pathlib import Path
 
 from core import tracker
 from ui.dialogs.compare_dialog import CompareDialog
+from ui.dialogs.trace_settings_dialog import TraceSettingsDialog
 
 
 class TraceWorker(QThread):
@@ -94,7 +95,9 @@ class FileTracePanel(QDockWidget):
 
         # actions
         self.btn_clear = QPushButton("Limpiar")
+        self.btn_config = QPushButton("Configurar")
         self.layout.addWidget(self.btn_clear)
+        self.layout.addWidget(self.btn_config)
 
         self.worker = None
         self.target = None
@@ -103,12 +106,17 @@ class FileTracePanel(QDockWidget):
         # connections
         self.btn_cancel.clicked.connect(self._on_cancel)
         self.btn_clear.clicked.connect(self._on_clear)
+        self.btn_config.clicked.connect(self._on_config)
         self.list_widget.itemDoubleClicked.connect(self._on_item_open)
 
     def start_trace(self, path: str, roots=None, exclude_dirs=None, exclude_file_patterns=None):
         self.target = path
+        # prefer explicit roots, otherwise use saved settings if present
         if roots is not None:
             self.roots = roots
+        else:
+            s = tracker.get_settings()
+            self.roots = s.get('roots', self.roots)
 
         # set exclusion lists
         if exclude_dirs is not None:
@@ -238,6 +246,17 @@ class FileTracePanel(QDockWidget):
                 dialog.exec_()
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"No se pudo comparar: {e}")
+
+    def _on_config(self):
+        dlg = TraceSettingsDialog(parent=self)
+        if dlg.exec_():
+            # reload settings and apply
+            s = tracker.get_settings()
+            self.roots = s.get('roots', self.roots)
+            self.exclude_dirs = s.get('exclude_dirs', getattr(self, 'exclude_dirs', []))
+            self.exclude_file_patterns = s.get('exclude_file_patterns', getattr(self, 'exclude_file_patterns', []))
+            # reflect in UI
+            self._on_clear()
         elif clicked == delete_btn:
             reply = QMessageBox.question(self, "Eliminar", f"Eliminar '{Path(path).name}'?", QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:

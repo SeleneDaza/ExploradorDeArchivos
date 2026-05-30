@@ -14,6 +14,40 @@ CACHE_TTL = 60 * 5  # 5 minutes
 # disk cache
 CACHE_DIR = Path.home() / ".explorador_cache"
 CACHE_FILE = CACHE_DIR / "tracker_cache.pickle"
+SETTINGS_FILE = CACHE_DIR / "settings.json"
+SETTINGS = {}
+
+
+def _load_settings():
+    global SETTINGS
+    try:
+        if SETTINGS_FILE.exists():
+            import json
+            with SETTINGS_FILE.open('r', encoding='utf-8') as f:
+                SETTINGS = json.load(f)
+        else:
+            SETTINGS = {}
+    except Exception:
+        SETTINGS = {}
+
+
+def save_settings(new: dict):
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        import json
+        with SETTINGS_FILE.open('w', encoding='utf-8') as f:
+            json.dump(new, f, indent=2, ensure_ascii=False)
+        _load_settings()
+    except Exception:
+        pass
+
+
+def get_settings() -> dict:
+    return dict(SETTINGS)
+
+
+# load settings on import
+_load_settings()
 
 
 def _load_cache():
@@ -28,9 +62,12 @@ def _load_cache():
 
 def _save_cache():
     try:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        with CACHE_FILE.open("wb") as f:
-            pickle.dump(_cache, f)
+        # only persist if settings allow it (default True)
+        persist = SETTINGS.get('persist_cache', True) if isinstance(SETTINGS, dict) else True
+        if persist:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            with CACHE_FILE.open("wb") as f:
+                pickle.dump(_cache, f)
     except Exception:
         pass
 
