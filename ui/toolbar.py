@@ -11,11 +11,11 @@ class Toolbar(QWidget):
         layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(6)
 
-        btn_up         = QPushButton("Subir")
-        btn_home       = QPushButton("Home")
-        btn_root       = QPushButton("Raíz")
-        btn_new_folder = QPushButton("Nueva carpeta")
-        btn_new_file   = QPushButton("Nuevo archivo")
+        btn_up         = QPushButton("⬆  Subir")
+        btn_home       = QPushButton("🏠  Home")
+        btn_root       = QPushButton("💻  Raíz")
+        btn_new_folder = QPushButton("📁  Nueva carpeta")
+        btn_new_file   = QPushButton("📄  Nuevo archivo")
 
         for btn in [btn_up, btn_home, btn_root, btn_new_folder, btn_new_file]:
             btn.setFixedHeight(30)

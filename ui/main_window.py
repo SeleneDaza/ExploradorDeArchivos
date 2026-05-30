@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QStatusBar,
-    QMessageBox, QInputDialog, QMenu, QAction
+    QMessageBox, QInputDialog, QMenu
 )
 from PyQt5.QtCore import Qt
 from core.filesystem import FileSystem
@@ -75,6 +75,8 @@ class MainWindow(QMainWindow):
             menu.addAction("Mover",       lambda: self._move(selected))
             menu.addSeparator()
             menu.addAction("Eliminar",    lambda: self._delete(selected))
+            menu.addSeparator()
+            menu.addAction("Permisos",    lambda: self._show_permissions(selected))
         else:
             menu.addAction("Nueva carpeta", self._new_folder)
             menu.addAction("Nuevo archivo", self._new_file)
@@ -133,6 +135,15 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.Yes:
             result = self.ops.delete(path)
             self._show_result(result)
+
+    # ── permisos ─────────────────────────────────────────────
+
+    def _show_permissions(self, path):
+        from ui.dialogs.permissions_dialog import PermissionsDialog
+        dialog = PermissionsDialog(path, parent=self)
+        dialog.exec_()
+
+    # ── helpers ──────────────────────────────────────────────
 
     def _show_result(self, result: dict):
         if result["ok"]:
