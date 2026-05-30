@@ -310,7 +310,9 @@ class MainWindow(QMainWindow):
             self.trace_panel.show()
             # search roots: limit to current workspace folder and home for speed
             roots = [self.fs.get_current_path(), str(Path.home())]
-            self.trace_panel.start_trace(path, roots=roots)
+            exclude_dirs = ['.git', 'node_modules', '__pycache__', '.venv', 'venv']
+            exclude_file_patterns = ['*.pyc', '*.pyo', '*.class', '*.exe']
+            self.trace_panel.start_trace(path, roots=roots, exclude_dirs=exclude_dirs, exclude_file_patterns=exclude_file_patterns)
         except Exception as e:
             QMessageBox.warning(self, "Error", f"No se pudo iniciar el rastreo: {e}")
 

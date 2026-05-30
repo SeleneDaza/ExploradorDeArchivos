@@ -17,16 +17,20 @@ class TraceWorker(QThread):
     references_found = pyqtSignal(list)
     finished = pyqtSignal()
 
-    def __init__(self, target_path: str, roots=None):
+    def __init__(self, target_path: str, roots=None, exclude_dirs=None, exclude_file_patterns=None):
         super().__init__()
         self.target_path = target_path
         self.roots = roots
+        self.exclude_dirs = exclude_dirs or []
+        self.exclude_file_patterns = exclude_file_patterns or []
         self._stop = False
 
     def run(self):
         # Stage 1: duplicates
         self.progress.emit(5)
-        dups = tracker.find_duplicates(self.target_path, roots=self.roots)
+        dups = tracker.find_duplicates(self.target_path, roots=self.roots,
+                           exclude_dirs=self.exclude_dirs,
+                           exclude_file_patterns=self.exclude_file_patterns)
         if self._stop:
             self.finished.emit()
             return
@@ -34,7 +38,10 @@ class TraceWorker(QThread):
         self.progress.emit(50)
 
         # Stage 2: references (may be expensive)
-        refs = tracker.find_references(self.target_path, roots=self.roots)
+        refs = tracker.find_references(self.target_path, roots=self.roots,
+                           max_files=None,
+                           exclude_dirs=self.exclude_dirs,
+                           exclude_file_patterns=self.exclude_file_patterns)
         if self._stop:
             self.finished.emit()
             return
@@ -97,10 +104,21 @@ class FileTracePanel(QDockWidget):
         self.btn_clear.clicked.connect(self._on_clear)
         self.list_widget.itemDoubleClicked.connect(self._on_item_open)
 
-    def start_trace(self, path: str, roots=None):
+    def start_trace(self, path: str, roots=None, exclude_dirs=None, exclude_file_patterns=None):
         self.target = path
         if roots is not None:
             self.roots = roots
+
+        # set exclusion lists
+        if exclude_dirs is not None:
+            self.exclude_dirs = exclude_dirs
+        else:
+            self.exclude_dirs = getattr(self, 'exclude_dirs', [])
+        if exclude_file_patterns is not None:
+            self.exclude_file_patterns = exclude_file_patterns
+        else:
+            self.exclude_file_patterns = getattr(self, 'exclude_file_patterns', [])
+
         # set header
         p = Path(path)
         self.label_name.setText(f"Archivo: {p.name}")
@@ -119,7 +137,9 @@ class FileTracePanel(QDockWidget):
         self.btn_cancel.setEnabled(True)
 
         # start worker thread
-        self.worker = TraceWorker(path, roots=self.roots)
+        self.worker = TraceWorker(path, roots=self.roots,
+                                  exclude_dirs=self.exclude_dirs,
+                                  exclude_file_patterns=self.exclude_file_patterns)
         self.worker.progress.connect(self.progress.setValue)
         self.worker.duplicates_found.connect(self._on_duplicates)
         self.worker.references_found.connect(self._on_references)

@@ -4,6 +4,7 @@ import time
 import pickle
 from pathlib import Path
 from typing import List, Dict, Optional
+import fnmatch
 
 # Simple in-memory cache: key -> (timestamp, result)
 _cache = {}
@@ -58,12 +59,17 @@ def compute_hash(path: str, chunk_size: int = 1024 * 1024) -> str:
     return h.hexdigest()
 
 
-def find_duplicates(target_path: str, roots: Optional[List[str]] = None) -> List[Dict]:
+def find_duplicates(target_path: str, roots: Optional[List[str]] = None,
+                    exclude_dirs: Optional[List[str]] = None,
+                    exclude_file_patterns: Optional[List[str]] = None) -> List[Dict]:
     target = Path(target_path)
     if not target.exists() or not target.is_file():
         return []
 
-    key = ("dup", str(target.resolve()))
+    exclude_dirs = exclude_dirs or []
+    exclude_file_patterns = exclude_file_patterns or []
+
+    key = ("dup", str(target.resolve()), tuple(sorted(roots or [])), tuple(sorted(exclude_dirs)), tuple(sorted(exclude_file_patterns)))
     now = time.time()
     if key in _cache:
         ts, val = _cache[key]
@@ -80,8 +86,13 @@ def find_duplicates(target_path: str, roots: Optional[List[str]] = None) -> List
     results = []
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
+            # prune dirnames according to exclude_dirs patterns/names
+            dirnames[:] = [d for d in dirnames if not any(d == ex or fnmatch.fnmatch(d, ex) for ex in exclude_dirs)]
             for fname in filenames:
                 try:
+                    # skip file patterns
+                    if any(fnmatch.fnmatch(fname, pat) for pat in exclude_file_patterns):
+                        continue
                     fpath = Path(dirpath) / fname
                     # skip the same file
                     if fpath.resolve() == target.resolve():
@@ -128,12 +139,17 @@ def is_text_file(path: str) -> bool:
         return False
 
 
-def find_references(target_path: str, roots: Optional[List[str]] = None, max_files: Optional[int] = None) -> List[Dict]:
+def find_references(target_path: str, roots: Optional[List[str]] = None,
+                    max_files: Optional[int] = None,
+                    exclude_dirs: Optional[List[str]] = None,
+                    exclude_file_patterns: Optional[List[str]] = None) -> List[Dict]:
     target = Path(target_path)
     if not target.exists() or not target.is_file():
         return []
+    exclude_dirs = exclude_dirs or []
+    exclude_file_patterns = exclude_file_patterns or []
 
-    key = ("ref", str(target.resolve()))
+    key = ("ref", str(target.resolve()), tuple(sorted(roots or [])), tuple(sorted(exclude_dirs)), tuple(sorted(exclude_file_patterns)), max_files)
     now = time.time()
     if key in _cache:
         ts, val = _cache[key]
@@ -150,7 +166,12 @@ def find_references(target_path: str, roots: Optional[List[str]] = None, max_fil
     files_scanned = 0
     for root in roots:
         for dirpath, dirnames, filenames in os.walk(root):
+            # prune directories
+            dirnames[:] = [d for d in dirnames if not any(d == ex or fnmatch.fnmatch(d, ex) for ex in exclude_dirs)]
             for fname in filenames:
+                # skip file patterns
+                if any(fnmatch.fnmatch(fname, pat) for pat in exclude_file_patterns):
+                    continue
                 fpath = Path(dirpath) / fname
                 try:
                     if not fpath.is_file():
