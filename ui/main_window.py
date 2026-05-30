@@ -11,7 +11,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Explorador de Archivos")
         self.setMinimumSize(900, 600)
         self._build_ui()
-        self.file_tree.navigate_to(self.fs.get_home())
+        # Navegar al mismo path que usa el botón Home
+        self._go_home()
 
     def _build_ui(self):
         central = QWidget()
