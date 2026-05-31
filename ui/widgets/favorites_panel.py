@@ -4,25 +4,16 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 from pathlib import Path
+from ui.theme import DARK, FONT_UI, btn_qss, R_XS, R_SM
 
-DARK = {
-    "bg":      "#181825",
-    "accent":  "#cba6f7",
-    "accent2": "#89b4fa",
-    "text":    "#cdd6f4",
-    "text_dim":"#6c7086",
-    "hover":   "#313244",
-    "border":  "#313244",
-}
+_T = DARK
 
 DEFAULT_FAVORITES = [
-    ("⌂  Home",       str(Path.home())),
-    ("📄  Documentos", str(Path.home() / "Documents")),
-    ("⬇  Descargas",  str(Path.home() / "Downloads")),
-    ("🖼  Imágenes",   str(Path.home() / "Pictures")),
-    ("💻  Raíz",       "/"),
-    ("⚙  etc",        "/etc"),
-    ("📦  var",        "/var"),
+    ("⌂  Home",        str(Path.home())),
+    ("📄  Documentos",  str(Path.home() / "Documents")),
+    ("⬇  Descargas",   str(Path.home() / "Downloads")),
+    ("🖼  Imágenes",    str(Path.home() / "Pictures")),
+    ("💻  Raíz",        "/"),
 ]
 
 
@@ -31,67 +22,74 @@ class FavoritesPanel(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setFixedWidth(180)
-        self.setStyleSheet(f"background: {DARK['bg']};")
+        self.setFixedWidth(186)
         self.favorites = list(DEFAULT_FAVORITES)
         self._build_ui()
+        self.set_theme(_T)
 
     def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 12, 8, 12)
-        layout.setSpacing(4)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(8, 14, 8, 10)
+        lay.setSpacing(4)
 
-        title = QLabel("  Favoritos")
-        title.setStyleSheet(f"""
-            color: {DARK['text_dim']};
-            font-size: 11px;
-            font-weight: bold;
-            letter-spacing: 1px;
-        """)
-        layout.addWidget(title)
+        # título de sección
+        self._title = QLabel("FAVORITOS")
+        lay.addWidget(self._title)
 
         line = QFrame()
         line.setFrameShape(QFrame.HLine)
-        line.setStyleSheet(f"background: {DARK['border']}; max-height: 1px; margin: 4px 0;")
-        layout.addWidget(line)
+        line.setFixedHeight(1)
+        self._sep = line
+        lay.addWidget(line)
 
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setFrameShape(QFrame.NoFrame)
-        self.scroll_area.setStyleSheet("background: transparent;")
+        # lista scrollable
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background:transparent;")
 
-        self.container = QWidget()
-        self.container.setStyleSheet("background: transparent;")
-        self.container_layout = QVBoxLayout(self.container)
-        self.container_layout.setContentsMargins(0, 0, 0, 0)
-        self.container_layout.setSpacing(2)
+        self._container = QWidget()
+        self._container.setStyleSheet("background:transparent;")
+        self._cl = QVBoxLayout(self._container)
+        self._cl.setContentsMargins(0, 0, 0, 0)
+        self._cl.setSpacing(2)
+        scroll.setWidget(self._container)
+        lay.addWidget(scroll)
 
-        self.scroll_area.setWidget(self.container)
-        layout.addWidget(self.scroll_area)
-
-        btn_add = QPushButton("＋  Agregar actual")
-        btn_add.setFixedHeight(28)
-        btn_add.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                color: {DARK['accent']};
-                border: 1px solid {DARK['accent']};
-                border-radius: 6px;
-                font-size: 12px;
-            }}
-            QPushButton:hover {{
-                background: {DARK['accent']};
-                color: {DARK['bg']};
-            }}
-        """)
-        btn_add.clicked.connect(self.add_requested)
-        layout.addWidget(btn_add)
+        self._btn_add = QPushButton("＋  Agregar carpeta actual")
+        self._btn_add.setFixedHeight(30)
+        self._btn_add.clicked.connect(lambda: self.path_selected.emit("__add_current__"))
+        lay.addWidget(self._btn_add)
 
         self._refresh_buttons()
 
+    def set_theme(self, T: dict):
+        global _T
+        _T = T
+        self.setStyleSheet(f"background:{T['surface']}; border-right:1px solid {T['border']};")
+        self._title.setStyleSheet(
+            f"color:{T['text_dim']}; font-size:10px; font-weight:700;"
+            f"letter-spacing:1.2px; padding-left:4px;"
+        )
+        self._sep.setStyleSheet(f"background:{T['border']};")
+        self._btn_add.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {T['accent']};
+                border: 1px solid {T['accent']};
+                border-radius: {R_SM}px;
+                font-size: 12px;
+                padding: 3px 6px;
+            }}
+            QPushButton:hover {{ background: {T['accent']}; color: {T['bg']}; }}
+        """)
+        self._refresh_buttons()
+
     def _refresh_buttons(self):
-        while self.container_layout.count():
-            item = self.container_layout.takeAt(0)
+        T = _T
+        while self._cl.count():
+            item = self._cl.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
@@ -100,26 +98,31 @@ class FavoritesPanel(QWidget):
             btn.setFixedHeight(32)
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setToolTip(path)
             btn.setStyleSheet(f"""
                 QPushButton {{
-                    color: {DARK['text']};
+                    color: {T['text_sub']};
                     text-align: left;
-                    padding: 0 8px;
+                    padding: 0 10px;
                     border: none;
-                    border-radius: 6px;
+                    border-radius: {R_XS}px;
                     font-size: 13px;
                     background: transparent;
                 }}
                 QPushButton:hover {{
-                    background: {DARK['hover']};
-                    color: {DARK['accent']};
+                    background: {T['overlay']};
+                    color: {T['text']};
+                }}
+                QPushButton:pressed {{
+                    background: {T['sel_bg']};
+                    color: {T['sel_text']};
                 }}
             """)
             _path = path
             btn.clicked.connect(lambda _, p=_path: self.path_selected.emit(p))
-            self.container_layout.addWidget(btn)
+            self._cl.addWidget(btn)
 
-        self.container_layout.addStretch()
+        self._cl.addStretch()
 
     def add_favorite(self, path: str):
         name = f"📁  {Path(path).name or path}"

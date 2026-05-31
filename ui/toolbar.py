@@ -1,114 +1,108 @@
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel
-from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QFrame, QLabel
 from PyQt5.QtCore import Qt
+from ui.theme import DARK, FONT_UI, btn_qss, R_SM
 
-DARK = {
-    "bg":       "#1e1e2e",
-    "accent":   "#cba6f7",
-    "accent2":  "#89b4fa",
-    "text":     "#cdd6f4",
-    "text_dim": "#6c7086",
-    "hover":    "#313244",
-    "border":   "#313244",
-}
+_T = DARK   # módulo empieza en dark; toggle_theme() llama a set_theme()
 
-BTN_STYLE = f"""
-    QPushButton {{
-        background: {DARK['hover']};
-        color: {DARK['text']};
-        border: none;
-        border-radius: 6px;
-        padding: 0 14px;
-        font-size: 13px;
-    }}
-    QPushButton:hover {{
-        background: {DARK['accent']};
-        color: {DARK['bg']};
-    }}
-    QPushButton:pressed {{ background: {DARK['accent2']}; }}
-"""
 
-BTN_ACTION_STYLE = f"""
-    QPushButton {{
-        background: transparent;
-        color: {DARK['accent']};
-        border: 1px solid {DARK['accent']};
-        border-radius: 6px;
-        padding: 0 14px;
-        font-size: 13px;
-    }}
-    QPushButton:hover {{
-        background: {DARK['accent']};
-        color: {DARK['bg']};
-    }}
-"""
+def _btn(text: str, tip: str, slot, fixed_w: int = None) -> QPushButton:
+    b = QPushButton(text)
+    b.setToolTip(tip)
+    b.setFixedHeight(34)
+    if fixed_w:
+        b.setFixedWidth(fixed_w)
+    b.setStyleSheet(btn_qss(_T))
+    b.setCursor(Qt.PointingHandCursor)
+    if slot:
+        b.clicked.connect(slot)
+    return b
+
+
+def _sep() -> QFrame:
+    f = QFrame()
+    f.setFrameShape(QFrame.VLine)
+    f.setFixedWidth(1)
+    f.setFixedHeight(22)
+    f.setStyleSheet(f"background: {_T['border']}; margin: 0 4px;")
+    return f
 
 
 class Toolbar(QWidget):
     def __init__(self, on_up, on_home, on_root,
                  on_new_folder, on_new_file,
                  on_back, on_forward,
-                 on_toggle_theme=None, is_dark=True):
+                 on_toggle_theme=None, is_dark=True,
+                 on_toggle_preview=None):
         super().__init__()
-        self.setFixedHeight(48)
-        self.setStyleSheet(f"background: {DARK['bg']};")
+        self._on_toggle_theme = on_toggle_theme
+        self._is_dark = is_dark
+        self._all_btns = []
+        self.setFixedHeight(52)
+        self._build(on_up, on_home, on_root, on_new_folder, on_new_file,
+                    on_back, on_forward, on_toggle_theme, on_toggle_preview)
+        self._apply_theme(_T)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 6, 12, 6)
-        layout.setSpacing(8)
+    def _build(self, on_up, on_home, on_root, on_new_folder, on_new_file,
+               on_back, on_forward, on_toggle_theme, on_toggle_preview):
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(14, 8, 14, 8)
+        lay.setSpacing(6)
 
-        btn_back    = QPushButton("◀")
-        btn_forward = QPushButton("▶")
-        btn_up      = QPushButton("⬆  Subir")
-        btn_home    = QPushButton("⌂  Home")
-        btn_root    = QPushButton("⬡  Raíz")
-        btn_folder  = QPushButton("＋ Carpeta")
-        btn_file    = QPushButton("＋ Archivo")
+        # ── grupo navegación ──
+        self._btn_back    = _btn("◀",          "Atrás  (Alt+←)",    on_back,    fixed_w=34)
+        self._btn_forward = _btn("▶",          "Adelante  (Alt+→)", on_forward, fixed_w=34)
+        self._btn_up      = _btn("⬆  Subir",   "Subir  (Alt+↑)",    on_up)
+        for b in (self._btn_back, self._btn_forward, self._btn_up):
+            lay.addWidget(b)
+            self._all_btns.append(b)
 
-        btn_back.setFixedSize(34, 34)
-        btn_forward.setFixedSize(34, 34)
+        lay.addWidget(_sep())
 
-        for btn in [btn_back, btn_forward, btn_up, btn_home, btn_root]:
-            btn.setStyleSheet(BTN_STYLE)
+        # ── grupo ubicación ──
+        self._btn_home = _btn("⌂  Home",    "Carpeta personal  (Ctrl+H)", on_home)
+        self._btn_root = _btn("⬡  Raíz",    "Directorio raíz",            on_root)
+        for b in (self._btn_home, self._btn_root):
+            lay.addWidget(b)
+            self._all_btns.append(b)
 
-        for btn in [btn_folder, btn_file]:
-            btn.setFixedHeight(34)
-            btn.setStyleSheet(BTN_ACTION_STYLE)
+        lay.addWidget(_sep())
 
-        btn_back.clicked.connect(on_back)
-        btn_forward.clicked.connect(on_forward)
-        btn_up.clicked.connect(on_up)
-        btn_home.clicked.connect(on_home)
-        btn_root.clicked.connect(on_root)
-        btn_folder.clicked.connect(on_new_folder)
-        btn_file.clicked.connect(on_new_file)
+        # ── grupo creación ──
+        self._btn_folder = _btn("＋ Carpeta", "Nueva carpeta  (Ctrl+N)",        on_new_folder)
+        self._btn_file   = _btn("＋ Archivo", "Nuevo archivo  (Ctrl+Shift+N)",  on_new_file)
+        for b in (self._btn_folder, self._btn_file):
+            lay.addWidget(b)
+            self._all_btns.append(b)
 
-        # theme toggle button (sun / moon)
-        btn_theme = QPushButton("🌙" if is_dark else "🌞")
-        btn_theme.setCheckable(True)
-        btn_theme.setFixedSize(48, 34)
-        btn_theme.setCursor(Qt.PointingHandCursor)
-        btn_theme.setStyleSheet(BTN_STYLE)
-        if on_toggle_theme:
-            btn_theme.clicked.connect(on_toggle_theme)
+        lay.addStretch()
 
-        layout.addWidget(btn_back)
-        layout.addWidget(btn_forward)
-        layout.addSpacing(4)
-        layout.addWidget(btn_up)
-        layout.addWidget(btn_home)
-        layout.addWidget(btn_root)
-        layout.addSpacing(8)
-        layout.addWidget(btn_folder)
-        layout.addWidget(btn_file)
-        layout.addWidget(btn_theme)
-        layout.addStretch()
+        # ── grupo vista ──
+        self._btn_theme = _btn("🌙" if self._is_dark else "🌞",
+                               "Cambiar tema", on_toggle_theme, fixed_w=40)
+        self._btn_preview = _btn("👁  Vista", "Mostrar/ocultar vista previa  (Ctrl+P)",
+                                 on_toggle_preview)
+        for b in (self._btn_theme, self._btn_preview):
+            lay.addWidget(b)
+            self._all_btns.append(b)
 
-        self._btn_theme = btn_theme
+    def _apply_theme(self, T: dict):
+        self.setStyleSheet(f"background: {T['bg']}; border-bottom: 1px solid {T['border']};")
+        style = btn_qss(T)
+        for b in self._all_btns:
+            b.setStyleSheet(style)
+        # separadores
+        for child in self.findChildren(QFrame):
+            child.setStyleSheet(f"background: {T['border']}; margin: 0 4px;")
 
+    def set_theme(self, T: dict, is_dark: bool):
+        self._is_dark = is_dark
+        _T_ref = T
+        self._apply_theme(T)
+        self._btn_theme.setText("🌙" if is_dark else "🌞")
+
+    # backwards compat
     def set_path(self, path: str):
         pass
 
     def set_theme_button(self, is_dark: bool):
-        if hasattr(self, "_btn_theme"):
-            self._btn_theme.setText("🌙" if is_dark else "🌞")
+        self._btn_theme.setText("🌙" if is_dark else "🌞")
