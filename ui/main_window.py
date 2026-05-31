@@ -11,6 +11,7 @@ from ui.toolbar import Toolbar
 from ui.file_tree import FileTree
 from ui.widgets.favorites_panel import FavoritesPanel
 from ui.widgets.search_bar import SearchBar
+from pathlib import Path
 
 DARK = {
     "bg":          "#1e1e2e",
@@ -26,21 +27,35 @@ DARK = {
     "warning":     "#f38ba8",
 }
 
+LIGHT = {
+    "bg":          "#ffffff",
+    "sidebar":     "#f3f4f6",
+    "panel":       "#ffffff",
+    "accent":      "#2563eb",
+    "accent2":     "#1e40af",
+    "text":        "#0f172a",
+    "text_dim":    "#475569",
+    "hover":       "#e6eefc",
+    "border":      "#e6e9ef",
+    "success":     "#16a34a",
+    "warning":     "#dc2626",
+}
 
-def apply_dark_theme(app):
+
+def apply_palette(app, theme):
     app.setStyle("Fusion")
     palette = QPalette()
-    palette.setColor(QPalette.Window,          QColor(DARK["bg"]))
-    palette.setColor(QPalette.WindowText,      QColor(DARK["text"]))
-    palette.setColor(QPalette.Base,            QColor(DARK["panel"]))
-    palette.setColor(QPalette.AlternateBase,   QColor(DARK["sidebar"]))
-    palette.setColor(QPalette.Text,            QColor(DARK["text"]))
-    palette.setColor(QPalette.Button,          QColor(DARK["hover"]))
-    palette.setColor(QPalette.ButtonText,      QColor(DARK["text"]))
-    palette.setColor(QPalette.Highlight,       QColor(DARK["accent"]))
-    palette.setColor(QPalette.HighlightedText, QColor(DARK["bg"]))
-    palette.setColor(QPalette.ToolTipBase,     QColor(DARK["panel"]))
-    palette.setColor(QPalette.ToolTipText,     QColor(DARK["text"]))
+    palette.setColor(QPalette.Window,          QColor(theme["bg"]))
+    palette.setColor(QPalette.WindowText,      QColor(theme["text"]))
+    palette.setColor(QPalette.Base,            QColor(theme.get("panel", theme["bg"])))
+    palette.setColor(QPalette.AlternateBase,   QColor(theme.get("sidebar", theme["bg"])))
+    palette.setColor(QPalette.Text,            QColor(theme["text"]))
+    palette.setColor(QPalette.Button,          QColor(theme.get("hover", theme["bg"])))
+    palette.setColor(QPalette.ButtonText,      QColor(theme["text"]))
+    palette.setColor(QPalette.Highlight,       QColor(theme["accent"]))
+    palette.setColor(QPalette.HighlightedText, QColor(theme["bg"]))
+    palette.setColor(QPalette.ToolTipBase,     QColor(theme.get("panel", theme["bg"])))
+    palette.setColor(QPalette.ToolTipText,     QColor(theme["text"]))
     app.setPalette(palette)
 
 
@@ -53,84 +68,23 @@ class MainWindow(QMainWindow):
         self.history_index = -1
         self.setWindowTitle("Explorador de Archivos")
         self.setMinimumSize(1100, 680)
+        self.is_dark = True
+        self.current_theme = DARK
         self._build_ui()
         # Navegar al mismo path que usa el botón Home
         self._go_home()
 
     def _build_ui(self):
-        self.setStyleSheet(f"""
-            QMainWindow {{ background: {DARK['bg']}; }}
-            QTreeView, QListView {{
-                background: {DARK['sidebar']};
-                color: {DARK['text']};
-                border: none;
-                font-size: 13px;
-                outline: none;
-            }}
-            QTreeView::item:hover, QListView::item:hover {{
-                background: {DARK['hover']};
-                border-radius: 6px;
-            }}
-            QTreeView::item:selected, QListView::item:selected {{
-                background: {DARK['accent']};
-                color: {DARK['bg']};
-                border-radius: 6px;
-            }}
-            QScrollBar:vertical {{
-                background: {DARK['bg']};
-                width: 8px;
-                border-radius: 4px;
-            }}
-            QScrollBar::handle:vertical {{
-                background: {DARK['border']};
-                border-radius: 4px;
-                min-height: 20px;
-            }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
-            QScrollBar:horizontal {{
-                background: {DARK['bg']};
-                height: 8px;
-            }}
-            QScrollBar::handle:horizontal {{
-                background: {DARK['border']};
-                border-radius: 4px;
-            }}
-            QMenu {{
-                background: {DARK['panel']};
-                color: {DARK['text']};
-                border: 1px solid {DARK['border']};
-                border-radius: 8px;
-                padding: 4px;
-            }}
-            QMenu::item {{ padding: 6px 20px; border-radius: 4px; }}
-            QMenu::item:selected {{ background: {DARK['hover']}; }}
-            QMenu::separator {{ background: {DARK['border']}; height: 1px; margin: 4px 8px; }}
-            QDialog {{ background: {DARK['bg']}; color: {DARK['text']}; }}
-            QGroupBox {{
-                color: {DARK['accent']};
-                border: 1px solid {DARK['border']};
-                border-radius: 8px;
-                margin-top: 12px;
-                padding: 8px;
-                font-weight: bold;
-            }}
-            QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}
-            QCheckBox {{ color: {DARK['text']}; }}
-            QLineEdit {{
-                background: {DARK['panel']};
-                color: {DARK['text']};
-                border: 1px solid {DARK['border']};
-                border-radius: 6px;
-                padding: 4px 8px;
-            }}
-            QLineEdit:focus {{ border: 1px solid {DARK['accent']}; }}
-            QStatusBar {{
-                background: {DARK['sidebar']};
-                color: {DARK['text_dim']};
-                font-size: 12px;
-            }}
-            QSplitter::handle {{ background: {DARK['border']}; width: 1px; }}
-        """)
+        # apply initial theme styles
+        self._apply_qss(self.current_theme)
+        app = None
+        try:
+            from PyQt5.QtWidgets import QApplication
+            app = QApplication.instance()
+        except Exception:
+            app = None
+        if app:
+            apply_palette(app, self.current_theme)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -146,6 +100,8 @@ class MainWindow(QMainWindow):
             on_new_file=self._new_file,
             on_back=self._go_back,
             on_forward=self._go_forward,
+            on_toggle_theme=self.toggle_theme,
+            is_dark=self.is_dark,
         )
         main_layout.addWidget(self.toolbar)
 
@@ -178,6 +134,8 @@ class MainWindow(QMainWindow):
         self.file_tree.list_view.customContextMenuRequested.connect(self._context_menu)
         self.file_tree.list_view.doubleClicked.connect(self._on_double_click)
         content_splitter.addWidget(self.file_tree)
+
+        # panel de rastreo: ahora se muestra como diálogo emergente al solicitarse
 
         content_splitter.setSizes([180, 820])
         main_layout.addWidget(content_splitter)
@@ -273,6 +231,11 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
 
         if selected:
+            # add rastreo de archivo for files
+            from pathlib import Path
+            if Path(selected).is_file():
+                menu.addAction("🔍  Rastrear uso del archivo", lambda: self._start_trace(selected))
+
             menu.addAction("✏   Renombrar",   lambda: self._rename(selected))
             menu.addAction("📋  Copiar",       lambda: self._copy(selected))
             menu.addAction("✂   Mover",        lambda: self._move(selected))
@@ -337,6 +300,111 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"   ✅  {result['result']}")
         else:
             QMessageBox.warning(self, "Error", result["error"])
+
+    def _start_trace(self, path: str):
+        # open a modal dialog for tracing the selected file
+        try:
+            from ui.widgets.file_trace_panel import FileTracePanel
+            dlg = FileTracePanel(parent=self)
+            # search roots: limit to current workspace folder and home for speed
+            roots = [self.fs.get_current_path(), str(Path.home())]
+            exclude_dirs = ['.git', 'node_modules', '__pycache__', '.venv', 'venv']
+            exclude_file_patterns = ['*.pyc', '*.pyo', '*.class', '*.exe']
+            dlg.start_trace(path, roots=roots, exclude_dirs=exclude_dirs, exclude_file_patterns=exclude_file_patterns)
+            dlg.exec_()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"No se pudo iniciar el rastreo: {e}")
+
+    def toggle_theme(self):
+        self.is_dark = not getattr(self, 'is_dark', True)
+        self.current_theme = DARK if self.is_dark else LIGHT
+        # apply palette and qss
+        try:
+            from PyQt5.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                apply_palette(app, self.current_theme)
+        except Exception:
+            pass
+        self._apply_qss(self.current_theme)
+        # update toolbar button
+        if hasattr(self, 'toolbar'):
+            self.toolbar.set_theme_button(self.is_dark)
+
+    def _apply_qss(self, T: dict):
+        self.setStyleSheet(f"""
+            QMainWindow {{ background: {T['bg']}; }}
+            QTreeView, QListView {{
+                background: {T['sidebar']};
+                color: {T['text']};
+                border: none;
+                font-size: 13px;
+                outline: none;
+            }}
+            QTreeView::item:hover, QListView::item:hover {{
+                background: {T['hover']};
+                border-radius: 6px;
+            }}
+            QTreeView::item:selected, QListView::item:selected {{
+                background: {T['accent']};
+                color: {T['bg']};
+                border-radius: 6px;
+            }}
+            QScrollBar:vertical {{
+                background: {T['bg']};
+                width: 8px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {T['border']};
+                border-radius: 4px;
+                min-height: 20px;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
+            QScrollBar:horizontal {{
+                background: {T['bg']};
+                height: 8px;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: {T['border']};
+                border-radius: 4px;
+            }}
+            QMenu {{
+                background: {T['panel']};
+                color: {T['text']};
+                border: 1px solid {T['border']};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+            QMenu::item {{ padding: 6px 20px; border-radius: 4px; }}
+            QMenu::item:selected {{ background: {T['hover']}; }}
+            QMenu::separator {{ background: {T['border']}; height: 1px; margin: 4px 8px; }}
+            QDialog {{ background: {T['bg']}; color: {T['text']}; }}
+            QGroupBox {{
+                color: {T['accent']};
+                border: 1px solid {T['border']};
+                border-radius: 8px;
+                margin-top: 12px;
+                padding: 8px;
+                font-weight: bold;
+            }}
+            QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; }}
+            QCheckBox {{ color: {T['text']}; }}
+            QLineEdit {{
+                background: {T['panel']};
+                color: {T['text']};
+                border: 1px solid {T['border']};
+                border-radius: 6px;
+                padding: 4px 8px;
+            }}
+            QLineEdit:focus {{ border: 1px solid {T['accent']}; }}
+            QStatusBar {{
+                background: {T['sidebar']};
+                color: {T['text_dim']};
+                font-size: 12px;
+            }}
+            QSplitter::handle {{ background: {T['border']}; width: 1px; }}
+        """)
 
 
 # ── Breadcrumb ───────────────────────────────────────────────

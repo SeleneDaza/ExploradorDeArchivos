@@ -47,7 +47,8 @@ BTN_ACTION_STYLE = f"""
 class Toolbar(QWidget):
     def __init__(self, on_up, on_home, on_root,
                  on_new_folder, on_new_file,
-                 on_back, on_forward):
+                 on_back, on_forward,
+                 on_toggle_theme=None, is_dark=True):
         super().__init__()
         self.setFixedHeight(48)
         self.setStyleSheet(f"background: {DARK['bg']};")
@@ -82,6 +83,15 @@ class Toolbar(QWidget):
         btn_folder.clicked.connect(on_new_folder)
         btn_file.clicked.connect(on_new_file)
 
+        # theme toggle button (sun / moon)
+        btn_theme = QPushButton("🌙" if is_dark else "🌞")
+        btn_theme.setCheckable(True)
+        btn_theme.setFixedSize(48, 34)
+        btn_theme.setCursor(Qt.PointingHandCursor)
+        btn_theme.setStyleSheet(BTN_STYLE)
+        if on_toggle_theme:
+            btn_theme.clicked.connect(on_toggle_theme)
+
         layout.addWidget(btn_back)
         layout.addWidget(btn_forward)
         layout.addSpacing(4)
@@ -91,7 +101,14 @@ class Toolbar(QWidget):
         layout.addSpacing(8)
         layout.addWidget(btn_folder)
         layout.addWidget(btn_file)
+        layout.addWidget(btn_theme)
         layout.addStretch()
+
+        self._btn_theme = btn_theme
 
     def set_path(self, path: str):
         pass
+
+    def set_theme_button(self, is_dark: bool):
+        if hasattr(self, "_btn_theme"):
+            self._btn_theme.setText("🌙" if is_dark else "🌞")
