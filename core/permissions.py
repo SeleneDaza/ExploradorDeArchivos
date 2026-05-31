@@ -1,8 +1,32 @@
 import os
 import stat
-import pwd
-import grp
+import sys
 from pathlib import Path
+
+_WINDOWS = sys.platform == "win32"
+
+if not _WINDOWS:
+    import pwd
+    import grp
+
+
+def _owner_group_windows(path: str):
+    try:
+        import win32security
+        sd = win32security.GetFileSecurity(
+            path,
+            win32security.OWNER_SECURITY_INFORMATION | win32security.GROUP_SECURITY_INFORMATION,
+        )
+        owner_sid = sd.GetSecurityDescriptorOwner()
+        group_sid = sd.GetSecurityDescriptorGroup()
+        owner, _, _ = win32security.LookupAccountSid(None, owner_sid)
+        group, _, _ = win32security.LookupAccountSid(None, group_sid)
+        return owner, group
+    except Exception:
+        try:
+            return os.getlogin(), "N/A"
+        except Exception:
+            return "N/A", "N/A"
 
 
 class Permissions:
@@ -17,23 +41,29 @@ class Permissions:
             st = target.stat()
             mode = st.st_mode
 
-            try:
-                owner = pwd.getpwuid(st.st_uid).pw_name
-            except KeyError:
-                owner = str(st.st_uid)
-
-            try:
-                group = grp.getgrgid(st.st_gid).gr_name
-            except KeyError:
-                group = str(st.st_gid)
+            if _WINDOWS:
+                owner, group = _owner_group_windows(path)
+                uid = 0
+                gid = 0
+            else:
+                try:
+                    owner = pwd.getpwuid(st.st_uid).pw_name
+                except KeyError:
+                    owner = str(st.st_uid)
+                try:
+                    group = grp.getgrgid(st.st_gid).gr_name
+                except KeyError:
+                    group = str(st.st_gid)
+                uid = st.st_uid
+                gid = st.st_gid
 
             return {
                 "ok":       True,
                 "path":     str(target),
                 "owner":    owner,
                 "group":    group,
-                "uid":      st.st_uid,
-                "gid":      st.st_gid,
+                "uid":      uid,
+                "gid":      gid,
                 "octal":    oct(mode)[-3:],
                 "symbolic": self._to_symbolic(mode),
                 "bits": {
@@ -52,7 +82,7 @@ class Permissions:
                         "write":   bool(mode & stat.S_IWOTH),
                         "execute": bool(mode & stat.S_IXOTH),
                     },
-                }
+                },
             }
 
         except PermissionError:
@@ -102,6 +132,9 @@ class Permissions:
             return {"ok": False, "error": str(e)}
 
     def chown(self, path: str, owner: str = None, group: str = None) -> dict:
+        if _WINDOWS:
+            return {"ok": False, "error": "chown no está disponible en Windows"}
+
         target = Path(path)
 
         if not target.exists():

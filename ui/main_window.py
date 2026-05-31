@@ -1,3 +1,5 @@
+import os
+import subprocess
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStatusBar, QMessageBox, QInputDialog, QMenu,
@@ -210,19 +212,18 @@ class MainWindow(QMainWindow):
     # ── doble clic ───────────────────────────────────────────
 
     def _on_double_click(self, index):
-        import subprocess
         path = self.file_tree.list_model.filePath(index)
         info = self.file_tree.list_model.fileInfo(index)
         if info.isDir():
             self._navigate(path)
         else:
             try:
-                subprocess.Popen(["xdg-open", path])
-            except Exception:
-                try:
-                    subprocess.Popen(["nano", path])
-                except Exception as e:
-                    self.status.showMessage(f"   No se pudo abrir: {e}")
+                if os.name == "nt":
+                    os.startfile(path)
+                else:
+                    subprocess.Popen(["xdg-open", path])
+            except Exception as e:
+                self.status.showMessage(f"   No se pudo abrir: {e}")
 
     # ── menú contextual ──────────────────────────────────────
 
