@@ -284,6 +284,8 @@ class MainWindow(QMainWindow):
             if Path(selected).is_file():
                 menu.addAction("Rastrear uso", lambda: self._start_trace(selected))
                 menu.addSeparator()
+            menu.addAction("Personalizar apariencia", lambda: self._personalize(selected))
+            menu.addSeparator()
             menu.addAction("Renombrar       F2",  lambda: self._rename(selected))
             menu.addAction("Copiar",              lambda: self._copy(selected))
             menu.addAction("Mover",               lambda: self._move(selected))
@@ -295,6 +297,8 @@ class MainWindow(QMainWindow):
         else:
             menu.addAction("Nueva carpeta   Ctrl+N",       self._new_folder)
             menu.addAction("Nuevo archivo   Ctrl+Shift+N", self._new_file)
+            menu.addSeparator()
+            menu.addAction("Mis personalizaciones", self._show_personalizations)
 
         menu.exec_(self.file_tree.list_view.mapToGlobal(pos))
 
@@ -328,7 +332,11 @@ class MainWindow(QMainWindow):
             T=self.current_theme,
         )
         if ok and name:
-            self._show_result(self.ops.rename(path, name))
+            result = self.ops.rename(path, name)
+            self._show_result(result)
+            if result.get("ok"):
+                from core.personalizer import Personalizer
+                Personalizer().move_path(path, result["result"])
 
     def _rename_selected(self):
         path = self.file_tree.get_selected_path()
@@ -356,7 +364,11 @@ class MainWindow(QMainWindow):
     def _move(self, path):
         dest = self._pick_folder("Mover a...")
         if dest:
-            self._show_result(self.ops.move(path, dest))
+            result = self.ops.move(path, dest)
+            self._show_result(result)
+            if result.get("ok"):
+                from core.personalizer import Personalizer
+                Personalizer().move_path(path, result["result"])
 
     def _copy_multi(self, paths: list):
         dest = self._pick_folder(f"Copiar {len(paths)} elementos a...")
@@ -415,6 +427,19 @@ class MainWindow(QMainWindow):
         dlg._result = "confirm"
         if dlg.exec_() == QDialog.Accepted:
             self._show_result(self.ops.delete(path))
+
+    def _personalize(self, path: str):
+        from ui.dialogs.personalize_dialog import PersonalizeDialog
+        PersonalizeDialog(path, T=self.current_theme, parent=self).exec_()
+        self.file_tree.refresh_view()
+
+    def _show_personalizations(self):
+        from ui.widgets.my_personalizations import MyPersonalizationsDialog
+        MyPersonalizationsDialog(
+            T=self.current_theme,
+            on_navigate=self._navigate,
+            parent=self,
+        ).exec_()
 
     def _show_permissions(self, path):
         from ui.dialogs.permissions_dialog import PermissionsDialog

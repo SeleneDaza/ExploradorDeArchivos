@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDir, QModelIndex, pyqtSignal, QSize
 
 from ui.theme import DARK, S
+from core.personalizer import COLORS
 
 _SORT_LABELS = ("Nombre", "Tamaño", "Tipo", "Fecha")
 
@@ -17,12 +18,14 @@ class FileTree(QWidget):
         self.fs = filesystem
         self._sort_col = 0
         self._sort_asc = True
-        self._icon_mode = True          # True = grilla de iconos, False = lista
-        self._sort_btns: list[QPushButton] = []
-        self._sort_bar: QWidget = None
-        self._sort_lbl: QLabel = None
+        self._icon_mode = True
+        self._sort_btns:    list[QPushButton] = []
+        self._color_btns:   dict[str, QPushButton] = {}
+        self._sort_bar:     QWidget = None
+        self._sort_lbl:     QLabel  = None
         self._btn_list_mode: QPushButton = None
         self._btn_icon_mode: QPushButton = None
+        self._delegate = None
         self._T = DARK
         self._build_ui()
 
@@ -65,6 +68,12 @@ class FileTree(QWidget):
         self.list_view.setSelectionMode(QListView.ExtendedSelection)
         self.list_view.doubleClicked.connect(self._on_list_double_clicked)
         self._apply_view_mode()
+
+        # delegate de personalización visual
+        from ui.delegates.file_delegate import FileItemDelegate
+        self._delegate = FileItemDelegate(self.list_model, self.list_view)
+        self.list_view.setItemDelegate(self._delegate)
+
         rl.addWidget(self.list_view)
 
         splitter.addWidget(self.tree_view)
@@ -118,6 +127,35 @@ class FileTree(QWidget):
 
         lay.addWidget(self._btn_list_mode)
         lay.addWidget(self._btn_icon_mode)
+
+        # ── separador + filtros de color ──
+        sep = QPushButton()
+        sep.setFixedSize(1, 20)
+        sep.setEnabled(False)
+        lay.addSpacing(6)
+
+        for color_key, (hex_c, label) in COLORS.items():
+            cb = QPushButton()
+            cb.setFixedSize(14, 14)
+            cb.setCheckable(True)
+            cb.setToolTip(f"Filtrar: {label}")
+            cb.setStyleSheet(
+                f"QPushButton {{ background:{hex_c}; border:2px solid transparent;"
+                f"border-radius:7px; }}"
+                f"QPushButton:hover {{ border-color:#ffffff88; }}"
+                f"QPushButton:checked {{ border-color:#ffffffcc; }}"
+            )
+            cb.clicked.connect(lambda _, k=color_key: self._on_color_filter(k))
+            lay.addWidget(cb)
+            self._color_btns[color_key] = cb
+
+        # botón quitar filtro
+        self._clear_filter_btn = QPushButton("×")
+        self._clear_filter_btn.setFixedSize(18, 18)
+        self._clear_filter_btn.setToolTip("Quitar filtro de color")
+        self._clear_filter_btn.setVisible(False)
+        self._clear_filter_btn.clicked.connect(lambda: self._on_color_filter(None))
+        lay.addWidget(self._clear_filter_btn)
 
         self._apply_sort_theme(bar, T=self._T)
         return bar
@@ -186,6 +224,19 @@ class FileTree(QWidget):
             self._btn_icon_mode.setChecked(icon_mode)
         if self._btn_list_mode:
             self._btn_list_mode.setChecked(not icon_mode)
+
+    def _on_color_filter(self, color_key: str | None):
+        # desmarcar todos los color buttons
+        for k, b in self._color_btns.items():
+            b.setChecked(k == color_key)
+        self._clear_filter_btn.setVisible(color_key is not None)
+        if self._delegate:
+            self._delegate.set_filter(color_key)
+            self.list_view.viewport().update()
+
+    def refresh_view(self):
+        """Repinta la lista para reflejar cambios de personalización."""
+        self.list_view.viewport().update()
 
     def set_theme(self, T: dict):
         self._T = T
