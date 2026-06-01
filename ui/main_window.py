@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QStatusBar, QMessageBox, QMenu,
     QLabel, QPushButton, QFrame, QSplitter, QShortcut,
-    QApplication,
+    QApplication, QStackedWidget, QListWidget, QListWidgetItem,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QKeySequence, QFont, QColor, QPalette
@@ -18,6 +18,7 @@ from ui.toolbar import Toolbar
 from ui.file_tree import FileTree
 from ui.widgets.search_bar import SearchBar
 from ui.widgets.preview_panel import PreviewPanel
+from core.searcher import SearchWorker
 
 # re-exportar para main.py
 __all__ = ["MainWindow", "apply_palette", "DARK", "LIGHT"]
@@ -33,6 +34,7 @@ class MainWindow(QMainWindow):
         self._theme_idx    = 0          # 0=DARK  1=LIGHT  2=RETRO
         self.current_theme = DARK
         self._preview_anim  = None
+        self._search_worker: SearchWorker | None = None
         self.setWindowTitle("Explorador de Archivos")
         self.setMinimumSize(1140, 700)
         self._build_ui()
@@ -95,7 +97,13 @@ class MainWindow(QMainWindow):
         self.file_tree.list_view.selectionModel().selectionChanged.connect(
             self._on_selection_changed
         )
-        self._splitter.addWidget(self.file_tree)
+        self._results_list = QListWidget()
+        self._results_list.itemActivated.connect(self._on_result_activated)
+
+        self._file_stack = QStackedWidget()
+        self._file_stack.addWidget(self.file_tree)      # índice 0
+        self._file_stack.addWidget(self._results_list)  # índice 1
+        self._splitter.addWidget(self._file_stack)
 
         self.preview = PreviewPanel()
         self.preview.request_search.connect(lambda p: self._on_search(Path(p).name))
@@ -176,13 +184,38 @@ class MainWindow(QMainWindow):
     # ── búsqueda ──────────────────────────────────────────────
 
     def _on_search(self, query: str):
-        self.file_tree.list_model.setNameFilters([f"*{query}*"])
-        self.file_tree.list_model.setNameFilterDisables(False)
-        self.status.showMessage(f"   Buscando: '{query}'")
+        if self._search_worker and self._search_worker.isRunning():
+            self._search_worker.stop()
+            self._search_worker.wait(300)
+        self._results_list.clear()
+        self._file_stack.setCurrentIndex(1)
+        self._search_worker = SearchWorker(query, self.fs.get_current_path())
+        self._search_worker.result_found.connect(self._on_result_found)
+        self._search_worker.finished.connect(
+            lambda n: self.status.showMessage(f"   {n} resultado(s) para '{query}'")
+        )
+        self._search_worker.start()
+        self.status.showMessage(f"   Buscando '{query}'...")
+
+    def _on_result_found(self, info: dict):
+        icon = "📁" if info["is_dir"] else "📄"
+        rel  = os.path.relpath(info["path"], self.fs.get_current_path())
+        item = QListWidgetItem(f"{icon}  {info['name']}    {rel}")
+        item.setData(Qt.UserRole, info["path"])
+        self._results_list.addItem(item)
+
+    def _on_result_activated(self, item: QListWidgetItem):
+        path   = item.data(Qt.UserRole)
+        parent = str(Path(path).parent)
+        self._navigate(parent)
+        self.search_bar._on_clear()
 
     def _on_search_cleared(self):
-        self.file_tree.list_model.setNameFilters(["*"])
-        self.file_tree.list_model.setNameFilterDisables(True)
+        if self._search_worker and self._search_worker.isRunning():
+            self._search_worker.stop()
+            self._search_worker.wait(300)
+        self._search_worker = None
+        self._file_stack.setCurrentIndex(0)
         self.status.showMessage(f"   {self.fs.get_current_path()}")
 
     # ── selección ─────────────────────────────────────────────
@@ -474,6 +507,18 @@ class MainWindow(QMainWindow):
         self.file_tree.set_theme(T)
         self.preview.set_theme(T)
         self._main_sep.setStyleSheet(f"background:{T['border']};")
+        self._results_list.setStyleSheet(f"""
+            QListWidget {{
+                background:{T['panel']}; color:{T['text']};
+                border:none; font-size:{S(13)}px;
+            }}
+            QListWidget::item {{
+                padding:{S(7)}px {S(14)}px;
+                border-bottom:1px solid {T['border']};
+            }}
+            QListWidget::item:hover {{ background:{T['overlay']}; }}
+            QListWidget::item:selected {{ background:{T['accent']}; color:{T['bg']}; }}
+        """)
 
     # ── zoom ──────────────────────────────────────────────────
 

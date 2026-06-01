@@ -111,6 +111,6 @@ class NameDialog(QDialog):
         Compatibilidad directa con QInputDialog.getText.
         """
         dlg = NameDialog(title, label, confirm_text,
-                         initial, placeholder, T, parent)
+                         initial, placeholder, T, parent=parent)
         ok = dlg.exec_() == QDialog.Accepted
         return dlg.value(), ok
