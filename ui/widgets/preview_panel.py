@@ -655,10 +655,8 @@ class PreviewPanel(QWidget):
             self._action_btns.append(b)
             return b
 
-        _abtn("search",      "Superbúsqueda",             self._do_search)
-        self._star_btn   = _abtn("star",        "Agregar / quitar favorito",  self._do_favorite, checkable=True)
-        self._folder_btn = _abtn("folder-open", "Abrir carpeta del archivo",  self._do_location, checkable=True)
-
+        # Botones de acción eliminados según ajuste final solicitado.
+        # (Antes estaban: search, git-branch, star, folder-open)
         lay.addStretch()
         self._action_bar = bar
         return bar
@@ -702,9 +700,8 @@ class PreviewPanel(QWidget):
         self._action_bar.setStyleSheet(
             f"background:{T['panel']};border-top:1px solid {T['border']};"
         )
-        _action_icons = ["search", "git-branch", "star", "folder-open"]
-        for b, iname in zip(self._action_btns, _action_icons):
-            b.setIcon(_ti(iname, tint))
+        # No hay botones de acción adicionales; dejar `_action_btns` vacío.
+        for b in self._action_btns:
             b.setIconSize(_action_sz)
             b.setStyleSheet(_BTN)
 
@@ -747,13 +744,16 @@ class PreviewPanel(QWidget):
 
     def _do_favorite(self, checked: bool):
         if not self._current:
-            self._star_btn.setChecked(False)
+            if hasattr(self, "_star_btn"):
+                self._star_btn.setChecked(False)
             return
         if checked:
-            self._star_btn.setToolTip("Quitar de favoritos")
+            if hasattr(self, "_star_btn"):
+                self._star_btn.setToolTip("Quitar de favoritos")
             self.request_favorite.emit(self._current)
         else:
-            self._star_btn.setToolTip("Agregar a favoritos")
+            if hasattr(self, "_star_btn"):
+                self._star_btn.setToolTip("Agregar a favoritos")
             self.request_unfavorite.emit(self._current)
 
     def _do_location(self, checked: bool):
@@ -766,9 +766,11 @@ class PreviewPanel(QWidget):
         if self._pinned or path == self._current:
             return
         self._current = path
-        self._star_btn.setChecked(False)
-        self._star_btn.setToolTip("Agregar a favoritos")
-        self._folder_btn.setChecked(False)
+        if hasattr(self, "_star_btn"):
+            self._star_btn.setChecked(False)
+            self._star_btn.setToolTip("Agregar a favoritos")
+        if hasattr(self, "_folder_btn"):
+            self._folder_btn.setChecked(False)
         increment_open_count(path)
         self._stop_media()
         self._hl = None
@@ -786,9 +788,11 @@ class PreviewPanel(QWidget):
 
     def clear(self):
         self._current = None
-        self._star_btn.setChecked(False)
-        self._star_btn.setToolTip("Agregar a favoritos")
-        self._folder_btn.setChecked(False)
+        if hasattr(self, "_star_btn"):
+            self._star_btn.setChecked(False)
+            self._star_btn.setToolTip("Agregar a favoritos")
+        if hasattr(self, "_folder_btn"):
+            self._folder_btn.setChecked(False)
         self._stop_media()
         self._stack.setCurrentIndex(self._EMPTY)
         self._name.setText("Sin selección")
