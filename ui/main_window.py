@@ -4,14 +4,14 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QStatusBar, QMessageBox, QInputDialog, QMenu,
+    QStatusBar, QMessageBox, QMenu,
     QLabel, QPushButton, QFrame, QSplitter, QShortcut,
     QApplication,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QKeySequence, QFont, QColor, QPalette
 
-from ui.theme import DARK, LIGHT, FONT_UI, global_qss, apply_palette, btn_qss, R_XS
+from ui.theme import DARK, LIGHT, RETRO, FONT_UI, global_qss, apply_palette, btn_qss, S, get_zoom, set_zoom, R_XS
 from core.filesystem import FileSystem
 from core.operations import Operations
 from ui.toolbar import Toolbar
@@ -31,8 +31,8 @@ class MainWindow(QMainWindow):
         self.ops = Operations()
         self.history       = []
         self.history_index = -1
-        self.is_dark        = True
-        self.current_theme  = DARK
+        self._theme_idx    = 0          # 0=DARK  1=LIGHT  2=RETRO
+        self.current_theme = DARK
         self._preview_anim  = None
         self.setWindowTitle("Explorador de Archivos")
         self.setMinimumSize(1140, 700)
@@ -63,7 +63,7 @@ class MainWindow(QMainWindow):
             on_back=self._go_back,
             on_forward=self._go_forward,
             on_toggle_theme=self.toggle_theme,
-            is_dark=self.is_dark,
+            theme_idx=self._theme_idx,
             on_toggle_preview=self._toggle_preview,
         )
         root.addWidget(self.toolbar)
@@ -97,12 +97,16 @@ class MainWindow(QMainWindow):
         self.file_tree.list_view.customContextMenuRequested.connect(self._context_menu)
         self.file_tree.list_view.doubleClicked.connect(self._on_double_click)
         self.file_tree.list_view.clicked.connect(self._on_file_clicked)
+        self.file_tree.list_view.selectionModel().selectionChanged.connect(
+            self._on_selection_changed
+        )
         self._splitter.addWidget(self.file_tree)
 
         self.preview = PreviewPanel()
         self.preview.request_search.connect(lambda p: self._on_search(Path(p).name))
         self.preview.request_trace.connect(self._start_trace)
         self.preview.request_favorite.connect(lambda p: self.favorites.add_favorite(p))
+        self.preview.request_unfavorite.connect(lambda p: self.favorites.remove_favorite(p))
         self.preview.request_location.connect(self._navigate)
         self._splitter.addWidget(self.preview)
 
@@ -127,6 +131,10 @@ class MainWindow(QMainWindow):
         sc("Ctrl+H",       self._go_home)
         sc("Ctrl+P",       self._toggle_preview)
         sc("Escape",       self._on_escape)
+        sc("Ctrl+=",       self._zoom_in)
+        sc("Ctrl++",       self._zoom_in)
+        sc("Ctrl+-",       self._zoom_out)
+        sc("Ctrl+0",       self._zoom_reset)
 
     # ── navegación ────────────────────────────────────────────
 
@@ -197,6 +205,16 @@ class MainWindow(QMainWindow):
         if Path(path).is_file():
             self.preview.set_file(path)
 
+    def _on_selection_changed(self):
+        paths = self.file_tree.get_selected_paths()
+        n = len(paths)
+        if n > 1:
+            self.status.showMessage(f"   {n} elementos seleccionados")
+        elif n == 1:
+            self.status.showMessage(f"   {paths[0]}")
+        else:
+            self.status.showMessage(f"   {self.fs.get_current_path()}")
+
     def _focus_search(self):
         self.search_bar.input.setFocus()
         self.search_bar.input.selectAll()
@@ -252,42 +270,62 @@ class MainWindow(QMainWindow):
     # ── menú contextual ───────────────────────────────────────
 
     def _context_menu(self, pos):
-        selected = self.file_tree.get_selected_path()
+        paths = self.file_tree.get_selected_paths()
         menu = QMenu(self)
 
-        if selected:
+        if len(paths) > 1:
+            n = len(paths)
+            menu.addAction(f"Copiar {n} elementos",   lambda: self._copy_multi(paths))
+            menu.addAction(f"Mover {n} elementos",    lambda: self._move_multi(paths))
+            menu.addSeparator()
+            menu.addAction(f"Eliminar {n} elementos", lambda: self._delete_multi(paths))
+        elif len(paths) == 1:
+            selected = paths[0]
             if Path(selected).is_file():
-                menu.addAction("🔍  Rastrear uso", lambda: self._start_trace(selected))
+                menu.addAction("Rastrear uso", lambda: self._start_trace(selected))
                 menu.addSeparator()
-            menu.addAction("✏  Renombrar  F2",      lambda: self._rename(selected))
-            menu.addAction("📋  Copiar",             lambda: self._copy(selected))
-            menu.addAction("✂  Mover",               lambda: self._move(selected))
+            menu.addAction("Renombrar       F2",  lambda: self._rename(selected))
+            menu.addAction("Copiar",              lambda: self._copy(selected))
+            menu.addAction("Mover",               lambda: self._move(selected))
             menu.addSeparator()
-            menu.addAction("🗑  Eliminar  Del",       lambda: self._delete(selected))
+            menu.addAction("Eliminar        Del", lambda: self._delete(selected))
             menu.addSeparator()
-            menu.addAction("🔒  Permisos",           lambda: self._show_permissions(selected))
-            menu.addAction("ℹ  Propiedades",         lambda: self._show_properties(selected))
+            menu.addAction("Permisos",            lambda: self._show_permissions(selected))
+            menu.addAction("Propiedades",         lambda: self._show_properties(selected))
         else:
-            menu.addAction("📁  Nueva carpeta  Ctrl+N",       self._new_folder)
-            menu.addAction("📄  Nuevo archivo  Ctrl+Shift+N", self._new_file)
+            menu.addAction("Nueva carpeta   Ctrl+N",       self._new_folder)
+            menu.addAction("Nuevo archivo   Ctrl+Shift+N", self._new_file)
 
         menu.exec_(self.file_tree.list_view.mapToGlobal(pos))
 
     # ── operaciones ───────────────────────────────────────────
 
     def _new_folder(self):
-        name, ok = QInputDialog.getText(self, "Nueva carpeta", "Nombre:")
+        from ui.dialogs.name_dialog import NameDialog
+        name, ok = NameDialog.ask(
+            self, "Nueva carpeta", "Nombre de la carpeta",
+            confirm_text="Crear", placeholder="mi-carpeta",
+            T=self.current_theme,
+        )
         if ok and name:
             self._show_result(self.ops.create_folder(self.fs.get_current_path(), name))
 
     def _new_file(self):
-        name, ok = QInputDialog.getText(self, "Nuevo archivo", "Nombre:")
+        from ui.dialogs.name_dialog import NameDialog
+        name, ok = NameDialog.ask(
+            self, "Nuevo archivo", "Nombre del archivo",
+            confirm_text="Crear", placeholder="archivo.txt",
+            T=self.current_theme,
+        )
         if ok and name:
             self._show_result(self.ops.create_file(self.fs.get_current_path(), name))
 
     def _rename(self, path):
-        name, ok = QInputDialog.getText(
-            self, "Renombrar", "Nuevo nombre:", text=Path(path).name
+        from ui.dialogs.name_dialog import NameDialog
+        name, ok = NameDialog.ask(
+            self, "Renombrar", "Nuevo nombre",
+            confirm_text="Renombrar", initial=Path(path).name,
+            T=self.current_theme,
         )
         if ok and name:
             self._show_result(self.ops.rename(path, name))
@@ -298,30 +336,84 @@ class MainWindow(QMainWindow):
             self._rename(path)
 
     def _delete_selected(self):
-        path = self.file_tree.get_selected_path()
-        if path:
-            self._delete(path)
+        paths = self.file_tree.get_selected_paths()
+        if len(paths) > 1:
+            self._delete_multi(paths)
+        elif len(paths) == 1:
+            self._delete(paths[0])
+
+    def _pick_folder(self, title: str) -> str | None:
+        from ui.dialogs.folder_picker_dialog import FolderPickerDialog
+        dlg = FolderPickerDialog(title, self.fs.get_current_path(), parent=self)
+        dlg.setStyleSheet(global_qss(self.current_theme))
+        return dlg.selected_path() if dlg.exec_() else None
 
     def _copy(self, path):
-        dest, ok = QInputDialog.getText(
-            self, "Copiar", "Destino:", text=self.fs.get_current_path()
-        )
-        if ok and dest:
+        dest = self._pick_folder("Copiar a...")
+        if dest:
             self._show_result(self.ops.copy(path, dest))
 
     def _move(self, path):
-        dest, ok = QInputDialog.getText(
-            self, "Mover", "Destino:", text=self.fs.get_current_path()
-        )
-        if ok and dest:
+        dest = self._pick_folder("Mover a...")
+        if dest:
             self._show_result(self.ops.move(path, dest))
 
-    def _delete(self, path):
-        reply = QMessageBox.question(
-            self, "Eliminar", f"¿Eliminar '{Path(path).name}'?",
-            QMessageBox.Yes | QMessageBox.No,
+    def _copy_multi(self, paths: list):
+        dest = self._pick_folder(f"Copiar {len(paths)} elementos a...")
+        if not dest:
+            return
+        errors = [r["error"] for p in paths if not (r := self.ops.copy(p, dest)).get("ok")]
+        if errors:
+            self.status.showMessage(f"   {len(paths)-len(errors)} copiados, {len(errors)} con error")
+        else:
+            self.status.showMessage(f"   {len(paths)} elementos copiados a {Path(dest).name}")
+
+    def _move_multi(self, paths: list):
+        dest = self._pick_folder(f"Mover {len(paths)} elementos a...")
+        if not dest:
+            return
+        errors = [r["error"] for p in paths if not (r := self.ops.move(p, dest)).get("ok")]
+        if errors:
+            self.status.showMessage(f"   {len(paths)-len(errors)} movidos, {len(errors)} con error")
+        else:
+            self.status.showMessage(f"   {len(paths)} elementos movidos a {Path(dest).name}")
+
+    def _delete_multi(self, paths: list):
+        from ui.dialogs.name_dialog import NameDialog
+        from PyQt5.QtWidgets import QDialog
+        dlg = NameDialog(
+            "Eliminar",
+            f"¿Eliminar {len(paths)} elementos seleccionados?",
+            confirm_text="Eliminar",
+            T=self.current_theme,
+            parent=self,
         )
-        if reply == QMessageBox.Yes:
+        dlg._input.hide()
+        dlg._btn_ok.setStyleSheet(btn_qss(self.current_theme, "danger"))
+        dlg._result = "confirm"
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        errors = [r["error"] for p in paths if not (r := self.ops.delete(p)).get("ok")]
+        if errors:
+            self.status.showMessage(f"   {len(paths)-len(errors)} eliminados, {len(errors)} con error")
+        else:
+            self.status.showMessage(f"   {len(paths)} elementos eliminados")
+
+    def _delete(self, path):
+        from ui.dialogs.name_dialog import NameDialog
+        from PyQt5.QtWidgets import QDialog
+        dlg = NameDialog(
+            "Eliminar",
+            f"¿Eliminar '{Path(path).name}'?",
+            confirm_text="Eliminar",
+            T=self.current_theme,
+            parent=self,
+        )
+        # El diálogo de confirmación no necesita input — ocultamos el campo
+        dlg._input.hide()
+        dlg._btn_ok.setStyleSheet(btn_qss(self.current_theme, "danger"))
+        dlg._result = "confirm"
+        if dlg.exec_() == QDialog.Accepted:
             self._show_result(self.ops.delete(path))
 
     def _show_permissions(self, path):
@@ -334,7 +426,7 @@ class MainWindow(QMainWindow):
 
     def _show_result(self, result: dict):
         if result["ok"]:
-            self.status.showMessage(f"   ✓  {result['result']}")
+            self.status.showMessage(f"   {result['result']}")
         else:
             QMessageBox.warning(self, "Error", result["error"])
 
@@ -354,19 +446,48 @@ class MainWindow(QMainWindow):
     # ── tema ──────────────────────────────────────────────────
 
     def toggle_theme(self):
-        self.is_dark       = not self.is_dark
-        self.current_theme = DARK if self.is_dark else LIGHT
-        T = self.current_theme
+        _themes = [DARK, LIGHT, RETRO]
+        self._theme_idx    = (self._theme_idx + 1) % 3
+        self.current_theme = _themes[self._theme_idx]
+        self._propagate_theme()
+
+    def _propagate_theme(self):
+        T   = self.current_theme
         app = QApplication.instance()
         if app:
             apply_palette(app, T)
         self._apply_qss(T)
-        # propagar a componentes con estado de tema
-        self.toolbar.set_theme(T, self.is_dark)
+        self.toolbar.set_theme(T, self._theme_idx)
         self.search_bar.set_theme(T)
         self.breadcrumb.set_theme(T)
         self.favorites.set_theme(T)
+        self.file_tree.set_theme(T)
+        self.preview.set_theme(T)
         self._main_sep.setStyleSheet(f"background:{T['border']};")
+
+    # ── zoom ──────────────────────────────────────────────────
+
+    def _zoom_apply(self, factor: float):
+        set_zoom(factor)
+        pct = round(get_zoom() * 100)
+        self._propagate_theme()
+        self.toolbar.update_zoom(pct)
+        self.search_bar.update_zoom()
+        self.breadcrumb.update_zoom()
+        self.favorites.update_zoom()
+        self.file_tree.update_zoom()
+        self.status.showMessage(
+            f"   Zoom {pct}%  —  use Ctrl+0 para restablecer"
+        )
+
+    def _zoom_in(self):
+        self._zoom_apply(round(get_zoom() + 0.1, 2))
+
+    def _zoom_out(self):
+        self._zoom_apply(round(max(0.75, get_zoom() - 0.1), 2))
+
+    def _zoom_reset(self):
+        self._zoom_apply(1.0)
 
     def _apply_qss(self, T: dict):
         self.setStyleSheet(global_qss(T))
@@ -386,12 +507,17 @@ class BreadcrumbBar(QWidget):
         super().__init__()
         self._T    = DARK
         self._path = ""
-        self.setFixedHeight(34)
+        self.setFixedHeight(S(36))
         self._layout = QHBoxLayout(self)
-        self._layout.setContentsMargins(14, 0, 14, 0)
-        self._layout.setSpacing(2)
+        self._layout.setContentsMargins(S(16), 0, S(16), 0)
+        self._layout.setSpacing(S(2))
         self._layout.addStretch()
         self.set_theme(DARK)
+
+    def update_zoom(self):
+        self.setFixedHeight(S(36))
+        if self._path:
+            self.set_path(self._path)
 
     def set_theme(self, T: dict):
         self._T = T
@@ -420,22 +546,26 @@ class BreadcrumbBar(QWidget):
             btn = QPushButton(part)
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedHeight(24)
+            btn.setFixedHeight(S(26))
 
             if is_last:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        color: {T['accent']}; font-weight: 700; font-size: 12px;
-                        border: none; padding: 0 5px; background: transparent;
+                        color: {T['accent']}; font-weight: 700; font-size: {S(13)}px;
+                        border: none; padding: 0 {S(6)}px; background: transparent;
+                        border-radius: {S(6)}px;
                     }}
                 """)
             else:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        color: {T['text_dim']}; font-size: 12px;
-                        border: none; padding: 0 5px; background: transparent;
+                        color: {T['text_dim']}; font-size: {S(13)}px;
+                        border: none; padding: 0 {S(6)}px; background: transparent;
+                        border-radius: {S(6)}px;
                     }}
-                    QPushButton:hover {{ color: {T['text']}; }}
+                    QPushButton:hover {{
+                        color: {T['text']}; background: {T['overlay']};
+                    }}
                 """)
 
             _p = accumulated
@@ -444,5 +574,5 @@ class BreadcrumbBar(QWidget):
 
             if not is_last:
                 sep = QLabel("›")
-                sep.setStyleSheet(f"color:{T['text_dim']}; font-size:14px;")
+                sep.setStyleSheet(f"color:{T['text_dim']}; font-size:{S(15)}px; background:transparent;")
                 self._layout.insertWidget(self._layout.count() - 1, sep)

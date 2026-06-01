@@ -4,16 +4,16 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 from pathlib import Path
-from ui.theme import DARK, FONT_UI, btn_qss, R_XS, R_SM
+from ui.theme import DARK, FONT_UI, btn_qss, S, R_XS, R_SM
 
 _T = DARK
 
 DEFAULT_FAVORITES = [
-    ("⌂  Home",        str(Path.home())),
-    ("📄  Documentos",  str(Path.home() / "Documents")),
-    ("⬇  Descargas",   str(Path.home() / "Downloads")),
-    ("🖼  Imágenes",    str(Path.home() / "Pictures")),
-    ("💻  Raíz",        "/"),
+    ("Inicio",       str(Path.home())),
+    ("Documentos",   str(Path.home() / "Documents")),
+    ("Descargas",    str(Path.home() / "Downloads")),
+    ("Imágenes",     str(Path.home() / "Pictures")),
+    ("Raíz",         "/"),
 ]
 
 
@@ -22,7 +22,7 @@ class FavoritesPanel(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setFixedWidth(186)
+        self.setFixedWidth(S(220))
         self.favorites = list(DEFAULT_FAVORITES)
         self._build_ui()
         self.set_theme(_T)
@@ -57,7 +57,7 @@ class FavoritesPanel(QWidget):
         scroll.setWidget(self._container)
         lay.addWidget(scroll)
 
-        self._btn_add = QPushButton("＋  Agregar carpeta actual")
+        self._btn_add = QPushButton("+ Agregar carpeta actual")
         self._btn_add.setFixedHeight(30)
         self._btn_add.clicked.connect(lambda: self.path_selected.emit("__add_current__"))
         lay.addWidget(self._btn_add)
@@ -67,24 +67,34 @@ class FavoritesPanel(QWidget):
     def set_theme(self, T: dict):
         global _T
         _T = T
-        self.setStyleSheet(f"background:{T['surface']}; border-right:1px solid {T['border']};")
+        self.setFixedWidth(S(220))
+        self.setStyleSheet(
+            f"background:{T['sidebar']}; border-right:1px solid {T['border']};"
+        )
         self._title.setStyleSheet(
-            f"color:{T['text_dim']}; font-size:10px; font-weight:700;"
-            f"letter-spacing:1.2px; padding-left:4px;"
+            f"color:{T['text_dim']}; font-size:{S(11)}px; font-weight:700;"
+            f"letter-spacing:1.4px; padding-left:{S(6)}px; background:transparent;"
         )
         self._sep.setStyleSheet(f"background:{T['border']};")
         self._btn_add.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
                 color: {T['accent']};
-                border: 1px solid {T['accent']};
-                border-radius: {R_SM}px;
-                font-size: 12px;
-                padding: 3px 6px;
+                border: 1.5px solid {T['border']};
+                border-radius: {S(8)}px;
+                font-size: {S(13)}px;
+                padding: {S(5)}px {S(8)}px;
+                min-height: {S(32)}px;
             }}
-            QPushButton:hover {{ background: {T['accent']}; color: {T['bg']}; }}
+            QPushButton:hover {{
+                background: {T['sel_bg']}; color: {T['sel_text']};
+                border-color: {T['accent']};
+            }}
         """)
         self._refresh_buttons()
+
+    def update_zoom(self):
+        self.set_theme(_T)
 
     def _refresh_buttons(self):
         T = _T
@@ -95,7 +105,7 @@ class FavoritesPanel(QWidget):
 
         for name, path in self.favorites:
             btn = QPushButton(name)
-            btn.setFixedHeight(32)
+            btn.setFixedHeight(S(36))
             btn.setFlat(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setToolTip(path)
@@ -103,10 +113,10 @@ class FavoritesPanel(QWidget):
                 QPushButton {{
                     color: {T['text_sub']};
                     text-align: left;
-                    padding: 0 10px;
+                    padding: 0 {S(14)}px;
                     border: none;
-                    border-radius: {R_XS}px;
-                    font-size: 13px;
+                    border-radius: {S(8)}px;
+                    font-size: {S(14)}px;
                     background: transparent;
                 }}
                 QPushButton:hover {{
@@ -125,10 +135,14 @@ class FavoritesPanel(QWidget):
         self._cl.addStretch()
 
     def add_favorite(self, path: str):
-        name = f"📁  {Path(path).name or path}"
+        name = Path(path).name or path
         if (name, path) not in self.favorites:
             self.favorites.append((name, path))
             self._refresh_buttons()
+
+    def remove_favorite(self, path: str):
+        self.favorites = [(n, p) for n, p in self.favorites if p != path]
+        self._refresh_buttons()
 
     def add_requested(self):
         self.path_selected.emit("__add_current__")

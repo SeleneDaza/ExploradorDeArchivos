@@ -1,29 +1,35 @@
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QFrame, QLabel
-from PyQt5.QtCore import Qt
-from ui.theme import DARK, FONT_UI, btn_qss, R_SM
+from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QFrame
+from PyQt5.QtCore import Qt, QSize
+from ui.theme import DARK, btn_qss, S
+from ui.icons import tinted_icon
 
-_T = DARK   # módulo empieza en dark; toggle_theme() llama a set_theme()
+_T = DARK
 
+# Ícono que se muestra en el botón de tema según el modo ACTIVO
+_THEME_ICON = ["moon", "sun", "palette"]
+_THEME_LABEL = ["Oscuro", "Claro", "Retro"]
 
-def _btn(text: str, tip: str, slot, fixed_w: int = None) -> QPushButton:
-    b = QPushButton(text)
-    b.setToolTip(tip)
-    b.setFixedHeight(34)
-    if fixed_w:
-        b.setFixedWidth(fixed_w)
-    b.setStyleSheet(btn_qss(_T))
-    b.setCursor(Qt.PointingHandCursor)
-    if slot:
-        b.clicked.connect(slot)
-    return b
+# (nombre_icono, texto_label_o_None, tooltip, argumento_slot)
+_NAV_BTNS = [
+    ("arrow-left",  None,    "Atrás          Alt+←"),
+    ("arrow-right", None,    "Adelante       Alt+→"),
+    ("arrow-up",    None,    "Subir          Alt+↑"),
+]
+_LOC_BTNS = [
+    ("house",       None,    "Inicio         Ctrl+H"),
+    ("hard-drive",  "Raíz",  "Directorio raíz"),
+]
+_NEW_BTNS = [
+    ("folder-plus", "Carpeta", "Nueva carpeta   Ctrl+N"),
+    ("file-plus",   "Archivo", "Nuevo archivo   Ctrl+Shift+N"),
+]
 
 
 def _sep() -> QFrame:
     f = QFrame()
     f.setFrameShape(QFrame.VLine)
-    f.setFixedWidth(1)
-    f.setFixedHeight(22)
-    f.setStyleSheet(f"background: {_T['border']}; margin: 0 4px;")
+    f.setFixedSize(1, 22)
+    f.setStyleSheet(f"background:{_T['border']}; margin:0 4px;")
     return f
 
 
@@ -31,78 +37,112 @@ class Toolbar(QWidget):
     def __init__(self, on_up, on_home, on_root,
                  on_new_folder, on_new_file,
                  on_back, on_forward,
-                 on_toggle_theme=None, is_dark=True,
-                 on_toggle_preview=None):
+                 on_toggle_theme=None, theme_idx: int = 0,
+                 on_toggle_preview=None,
+                 on_zoom_in=None, on_zoom_out=None, on_zoom_reset=None):
         super().__init__()
-        self._on_toggle_theme = on_toggle_theme
-        self._is_dark = is_dark
-        self._all_btns = []
+        self._theme_idx  = theme_idx
+        self._all_btns:  list[QPushButton] = []
+        self._seps:      list[QFrame]      = []
+        self._icon_btns: dict[QPushButton, str] = {}   # btn → nombre de ícono
         self.setFixedHeight(52)
         self._build(on_up, on_home, on_root, on_new_folder, on_new_file,
                     on_back, on_forward, on_toggle_theme, on_toggle_preview)
         self._apply_theme(_T)
 
+    # ── construcción ─────────────────────────────────────────
+
     def _build(self, on_up, on_home, on_root, on_new_folder, on_new_file,
                on_back, on_forward, on_toggle_theme, on_toggle_preview):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(14, 8, 14, 8)
-        lay.setSpacing(6)
+        lay.setSpacing(3)
 
-        # ── grupo navegación ──
-        self._btn_back    = _btn("◀",          "Atrás  (Alt+←)",    on_back,    fixed_w=34)
-        self._btn_forward = _btn("▶",          "Adelante  (Alt+→)", on_forward, fixed_w=34)
-        self._btn_up      = _btn("⬆  Subir",   "Subir  (Alt+↑)",    on_up)
-        for b in (self._btn_back, self._btn_forward, self._btn_up):
-            lay.addWidget(b)
+        slots_nav  = [on_back, on_forward, on_up]
+        slots_loc  = [on_home, on_root]
+        slots_new  = [on_new_folder, on_new_file]
+
+        def _btn(icon_name: str, label: str | None, tip: str,
+                 slot=None, fixed_w: int | None = None) -> QPushButton:
+            b = QPushButton()
+            if label:
+                b.setText(f"  {label}")
+            b.setToolTip(tip)
+            b.setFixedHeight(34)
+            if fixed_w:
+                b.setFixedWidth(fixed_w)
+            b.setCursor(Qt.PointingHandCursor)
+            if slot:
+                b.clicked.connect(slot)
             self._all_btns.append(b)
-
-        lay.addWidget(_sep())
-
-        # ── grupo ubicación ──
-        self._btn_home = _btn("⌂  Home",    "Carpeta personal  (Ctrl+H)", on_home)
-        self._btn_root = _btn("⬡  Raíz",    "Directorio raíz",            on_root)
-        for b in (self._btn_home, self._btn_root):
+            self._icon_btns[b] = icon_name
             lay.addWidget(b)
-            self._all_btns.append(b)
+            return b
 
-        lay.addWidget(_sep())
+        def sep():
+            s = _sep()
+            self._seps.append(s)
+            lay.addWidget(s)
 
-        # ── grupo creación ──
-        self._btn_folder = _btn("＋ Carpeta", "Nueva carpeta  (Ctrl+N)",        on_new_folder)
-        self._btn_file   = _btn("＋ Archivo", "Nuevo archivo  (Ctrl+Shift+N)",  on_new_file)
-        for b in (self._btn_folder, self._btn_file):
-            lay.addWidget(b)
-            self._all_btns.append(b)
+        # Navegación (solo ícono)
+        for (iname, lbl, tip), slot in zip(_NAV_BTNS, slots_nav):
+            _btn(iname, lbl, tip, slot, fixed_w=34)
+        sep()
+
+        # Ubicación
+        for (iname, lbl, tip), slot in zip(_LOC_BTNS, slots_loc):
+            _btn(iname, lbl, tip, slot, fixed_w=34 if not lbl else None)
+        sep()
+
+        # Crear
+        for (iname, lbl, tip), slot in zip(_NEW_BTNS, slots_new):
+            _btn(iname, lbl, tip, slot)
 
         lay.addStretch()
 
-        # ── grupo vista ──
-        self._btn_theme = _btn("🌙" if self._is_dark else "🌞",
-                               "Cambiar tema", on_toggle_theme, fixed_w=40)
-        self._btn_preview = _btn("👁  Vista", "Mostrar/ocultar vista previa  (Ctrl+P)",
-                                 on_toggle_preview)
-        for b in (self._btn_theme, self._btn_preview):
-            lay.addWidget(b)
-            self._all_btns.append(b)
+        # Tema (ícono del modo activo)
+        self._btn_theme = _btn(
+            _THEME_ICON[self._theme_idx], None,
+            "Cambiar tema  (Oscuro → Claro → Retro)",
+            on_toggle_theme, fixed_w=34,
+        )
+        sep()
+
+        # Vista previa (ícono + texto)
+        _btn("panel-right", "Vista previa",
+             "Mostrar/ocultar panel de vista previa  (Ctrl+P)",
+             on_toggle_preview)
+
+    # ── estilos ───────────────────────────────────────────
 
     def _apply_theme(self, T: dict):
-        self.setStyleSheet(f"background: {T['bg']}; border-bottom: 1px solid {T['border']};")
-        style = btn_qss(T)
+        toolbar_bg = T.get("toolbar", T["bg"])
+        self.setStyleSheet(
+            f"background:{toolbar_bg}; border-bottom:1px solid {T['border']};"
+        )
+        qss = btn_qss(T)
+        tint = T["text_sub"]
+        icon_size = QSize(17, 17)
         for b in self._all_btns:
-            b.setStyleSheet(style)
-        # separadores
-        for child in self.findChildren(QFrame):
-            child.setStyleSheet(f"background: {T['border']}; margin: 0 4px;")
+            b.setStyleSheet(qss)
+            name = self._icon_btns.get(b)
+            if name:
+                b.setIcon(tinted_icon(name, tint))
+                b.setIconSize(icon_size)
+        for s in self._seps:
+            s.setStyleSheet(f"background:{T['border']}; margin:0 4px;")
 
-    def set_theme(self, T: dict, is_dark: bool):
-        self._is_dark = is_dark
-        _T_ref = T
+    def set_theme(self, T: dict, theme_idx: int = 0):
+        self._theme_idx = theme_idx
+        # actualizar ícono del botón de tema
+        self._icon_btns[self._btn_theme] = _THEME_ICON[theme_idx]
         self._apply_theme(T)
-        self._btn_theme.setText("🌙" if is_dark else "🌞")
 
-    # backwards compat
+    def update_zoom(self, zoom_pct: int = 100):
+        pass
+
     def set_path(self, path: str):
         pass
 
-    def set_theme_button(self, is_dark: bool):
-        self._btn_theme.setText("🌙" if is_dark else "🌞")
+    def set_theme_button(self, theme_idx: int = 0):
+        self._icon_btns[self._btn_theme] = _THEME_ICON[theme_idx]

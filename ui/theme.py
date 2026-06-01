@@ -1,6 +1,7 @@
 """
-Sistema de diseño centralizado para ExploradorDeArchivos.
-Todos los archivos UI importan colores, fuentes y builders QSS desde aquí.
+Sistema de diseño centralizado — ExploradorDeArchivos
+Paletas: DARK (Linear/VSCode), LIGHT (Notion/macOS), RETRO (pastel cálido)
+Zoom:    S(n) escala cualquier valor de píxel; set_zoom() reconstruye toda la UI
 """
 import sys
 
@@ -10,131 +11,135 @@ if sys.platform == "win32":
     FONT_UI   = "Segoe UI"
     FONT_MONO = "Cascadia Code, Consolas, Courier New"
 elif sys.platform == "darwin":
-    FONT_UI   = "SF Pro Text"
-    FONT_MONO = "SF Mono, Menlo"
+    FONT_UI   = "SF Pro Display"
+    FONT_MONO = "SF Mono, Menlo, Monaco"
 else:
-    FONT_UI   = "Ubuntu, Cantarell, sans-serif"
-    FONT_MONO = "Ubuntu Mono, DejaVu Sans Mono, monospace"
+    FONT_UI   = "Inter, Ubuntu, sans-serif"
+    FONT_MONO = "JetBrains Mono, Ubuntu Mono, monospace"
 
-# ── Paleta oscura (Catppuccin Mocha) ─────────────────────────
+# ── Sistema de zoom (Ctrl+= / Ctrl+- / Ctrl+0) ───────────────
+
+_ZOOM: float = 1.0
+
+
+def S(n: float) -> int:
+    """Escala un valor de píxeles por el zoom actual."""
+    return max(1, round(n * _ZOOM))
+
+
+def get_zoom() -> float:
+    return _ZOOM
+
+
+def set_zoom(factor: float):
+    global _ZOOM
+    _ZOOM = max(0.75, min(2.5, factor))
+
+
+# ── Paleta oscura — inspirada en Linear / VSCode ─────────────
 
 DARK = {
-    "bg":       "#1e1e2e",
-    "surface":  "#181825",
-    "panel":    "#24243e",
-    "overlay":  "#313244",
-    "accent":   "#cba6f7",
-    "accent2":  "#89b4fa",
-    "accent3":  "#74c7ec",
-    "text":     "#cdd6f4",
-    "text_sub": "#bac2de",
-    "text_dim": "#6c7086",
-    "success":  "#a6e3a1",
-    "warning":  "#f38ba8",
-    "caution":  "#fab387",
-    "border":   "#313244",
-    "sel_bg":   "rgba(203,166,247,0.15)",
-    "sel_text": "#cba6f7",
-    # alias para compatibilidad legacy
-    "sidebar":  "#181825",
-    "hover":    "#313244",
+    "bg":       "#0e0e14",
+    "surface":  "#141420",
+    "panel":    "#1a1a28",
+    "overlay":  "#24243a",
+    "accent":   "#7b6cf6",
+    "accent2":  "#4fa4f8",
+    "accent3":  "#2ec4a0",
+    "text":     "#ebebf5",
+    "text_sub": "#8888aa",
+    "text_dim": "#44446a",
+    "success":  "#2ec4a0",
+    "warning":  "#f26d6a",
+    "caution":  "#f5a742",
+    "border":   "#24243a",
+    "sel_bg":   "rgba(123,108,246,0.18)",
+    "sel_text": "#a99df8",
+    "sidebar":  "#0b0b12",
+    "hover":    "#24243a",
 }
 
-# ── Paleta clara (Catppuccin Latte) ──────────────────────────
+# ── Paleta clara — inspirada en Notion / macOS ───────────────
 
 LIGHT = {
-    "bg":       "#eff1f5",
-    "surface":  "#e6e9ef",
-    "panel":    "#dce0e8",
-    "overlay":  "#ccd0da",
-    "accent":   "#8839ef",
-    "accent2":  "#1e66f5",
-    "accent3":  "#04a5e5",
-    "text":     "#4c4f69",
-    "text_sub": "#5c5f77",
-    "text_dim": "#9ca0b0",
-    "success":  "#40a02b",
-    "warning":  "#d20f39",
-    "caution":  "#fe640b",
-    "border":   "#ccd0da",
-    "sel_bg":   "rgba(136,57,239,0.12)",
-    "sel_text": "#8839ef",
-    "sidebar":  "#e6e9ef",
-    "hover":    "#ccd0da",
+    "bg":       "#ffffff",
+    "surface":  "#fafafd",
+    "panel":    "#f2f2fa",
+    "overlay":  "#e8e8f4",
+    "accent":   "#5244cc",
+    "accent2":  "#2171e8",
+    "accent3":  "#09a87a",
+    "text":     "#12122a",
+    "text_sub": "#52527a",
+    "text_dim": "#9898ba",
+    "success":  "#09a87a",
+    "warning":  "#d93a3a",
+    "caution":  "#d07820",
+    "border":   "#e2e2f0",
+    "sel_bg":   "rgba(82,68,204,0.11)",
+    "sel_text": "#5244cc",
+    "sidebar":  "#f5f5fd",
+    "hover":    "#e8e8f4",
 }
 
-# ── Radio de borde ────────────────────────────────────────────
+# ── Paleta retro — pastel cálido ─────────────────────────────
 
+RETRO = {
+    "bg":       "#faf5e8",
+    "surface":  "#f5edd8",
+    "panel":    "#f0dfd2",
+    "overlay":  "#ecddd0",
+    "accent":   "#e87570",
+    "accent2":  "#5bc4b0",
+    "accent3":  "#f0c040",
+    "text":     "#3d2b1f",
+    "text_sub": "#6b4c3b",
+    "text_dim": "#a08060",
+    "success":  "#6bbf6b",
+    "warning":  "#e87570",
+    "caution":  "#f0a040",
+    "border":   "#d4b0a0",
+    "sel_bg":   "rgba(232,117,112,0.18)",
+    "sel_text": "#e87570",
+    "sidebar":  "#f0e4d0",
+    "hover":    "#ecddd0",
+    "toolbar":          "#e8a098",
+    "scrollbar_handle": "#f0c040",
+}
+
+# ── Radios de borde (tokens fijos) ────────────────────────────
+# Para código Python que usa setFixedHeight, etc.
 R_XS = 4
 R_SM = 6
 R_MD = 8
 R_LG = 12
 
-# ── Builder: botón ───────────────────────────────────────────
-
-def btn_qss(T: dict, variant: str = "default") -> str:
-    if variant == "accent":
-        bg, fg = T["accent"], T["bg"]
-        hbg, hfg = T["accent2"], T["bg"]
-    elif variant == "ghost":
-        bg, fg = "transparent", T["text_sub"]
-        hbg, hfg = T["overlay"], T["text"]
-    elif variant == "danger":
-        bg, fg = T["overlay"], T["warning"]
-        hbg, hfg = T["warning"], T["bg"]
-    else:
-        bg, fg = T["overlay"], T["text"]
-        hbg, hfg = T["accent"], T["bg"]
-    return f"""
-QPushButton {{
-    background: {bg}; color: {fg};
-    border: none; border-radius: {R_SM}px;
-    font-family: "{FONT_UI}"; font-size: 13px;
-    padding: 5px 14px;
-}}
-QPushButton:hover {{ background: {hbg}; color: {hfg}; }}
-QPushButton:pressed {{ background: {T['accent2']}; color: {T['bg']}; }}
-QPushButton:disabled {{ background: {T['surface']}; color: {T['text_dim']}; }}
-"""
-
-# ── Builder: input ────────────────────────────────────────────
-
-def input_qss(T: dict) -> str:
-    return f"""
-QLineEdit {{
-    background: {T['panel']}; color: {T['text']};
-    border: 1.5px solid {T['border']}; border-radius: {R_SM}px;
-    font-family: "{FONT_UI}"; font-size: 13px;
-    padding: 5px 12px;
-    selection-background-color: {T['accent']}; selection-color: {T['bg']};
-}}
-QLineEdit:focus {{ border: 1.5px solid {T['accent']}; background: {T['surface']}; }}
-QLineEdit:hover:!focus {{ border: 1.5px solid {T['text_dim']}; }}
-"""
-
-# ── Builder: QSS global para QMainWindow ─────────────────────
+# ── Builder: QSS global ───────────────────────────────────────
 
 def global_qss(T: dict) -> str:
+    _scroll = T.get("scrollbar_handle", T["overlay"])
+    _toolbar_bg = T.get("toolbar", T["bg"])
     return f"""
 * {{ font-family: "{FONT_UI}"; }}
 
-QMainWindow {{ background: {T['bg']}; }}
+QMainWindow, QDialog {{ background: {T['bg']}; color: {T['text']}; }}
 
-/* ── Vistas de lista / árbol ── */
+/* ── Árbol y lista ── */
 QTreeView, QListView {{
     background: {T['surface']};
     color: {T['text']};
     border: none;
-    font-size: 13px;
+    font-size: {S(13)}px;
     outline: none;
     show-decoration-selected: 1;
+    padding: {S(3)}px;
 }}
 QTreeView::item, QListView::item {{
-    padding: 5px 6px;
-    border-radius: {R_XS}px;
-    min-height: 22px;
+    padding: {S(5)}px {S(9)}px;
+    border-radius: {S(7)}px;
+    min-height: {S(26)}px;
 }}
-QTreeView::item:hover, QListView::item:hover {{
+QTreeView::item:hover:!selected, QListView::item:hover:!selected {{
     background: {T['overlay']};
 }}
 QTreeView::item:selected, QListView::item:selected {{
@@ -147,20 +152,22 @@ QTreeView::branch:selected {{ background: {T['sel_bg']}; }}
 
 /* ── Scrollbars ── */
 QScrollBar:vertical {{
-    background: transparent; width: 6px; margin: 0;
+    background: transparent; width: {S(10)}px; margin: {S(4)}px 0;
 }}
 QScrollBar::handle:vertical {{
-    background: {T['border']}; border-radius: 3px; min-height: 28px;
+    background: {_scroll}; border-radius: {S(5)}px;
+    min-height: {S(36)}px; margin: 0 {S(2)}px;
 }}
-QScrollBar::handle:vertical:hover {{ background: {T['text_dim']}; }}
+QScrollBar::handle:vertical:hover {{ background: {T['accent']}; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar:horizontal {{
-    background: transparent; height: 6px; margin: 0;
+    background: transparent; height: {S(10)}px; margin: 0 {S(4)}px;
 }}
 QScrollBar::handle:horizontal {{
-    background: {T['border']}; border-radius: 3px; min-width: 28px;
+    background: {_scroll}; border-radius: {S(5)}px;
+    min-width: {S(36)}px; margin: {S(2)}px 0;
 }}
-QScrollBar::handle:horizontal:hover {{ background: {T['text_dim']}; }}
+QScrollBar::handle:horizontal:hover {{ background: {T['accent']}; }}
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 
 /* ── Menú contextual ── */
@@ -168,84 +175,173 @@ QMenu {{
     background: {T['panel']};
     color: {T['text']};
     border: 1px solid {T['border']};
-    border-radius: {R_MD}px;
-    padding: 5px;
+    border-radius: {S(12)}px;
+    padding: {S(6)}px {S(4)}px;
 }}
-QMenu::item {{ padding: 7px 22px; border-radius: {R_XS}px; font-size: 13px; }}
+QMenu::item {{
+    padding: {S(9)}px {S(28)}px;
+    border-radius: {S(8)}px;
+    font-size: {S(14)}px;
+    margin: {S(1)}px {S(4)}px;
+}}
 QMenu::item:selected {{ background: {T['overlay']}; color: {T['text']}; }}
-QMenu::separator {{ background: {T['border']}; height: 1px; margin: 4px 10px; }}
+QMenu::separator {{
+    background: {T['border']}; height: 1px;
+    margin: {S(4)}px {S(8)}px;
+}}
 
 /* ── Tooltip ── */
 QToolTip {{
     background: {T['panel']};
     color: {T['text_sub']};
     border: 1px solid {T['border']};
-    border-radius: {R_XS}px;
-    padding: 4px 8px;
-    font-size: 12px;
+    border-radius: {S(8)}px;
+    padding: {S(5)}px {S(10)}px;
+    font-size: {S(12)}px;
 }}
 
-/* ── Diálogos ── */
-QDialog {{ background: {T['bg']}; color: {T['text']}; }}
+/* ── GroupBox (diálogos) ── */
 QGroupBox {{
     color: {T['accent']};
     border: 1px solid {T['border']};
-    border-radius: {R_LG}px;
-    margin-top: 14px;
-    padding: 10px 8px 8px 8px;
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.5px;
+    border-radius: {S(10)}px;
+    margin-top: {S(14)}px;
+    padding: {S(10)}px {S(8)}px {S(8)}px {S(8)}px;
+    font-weight: 700;
+    font-size: {S(12)}px;
+    letter-spacing: 0.8px;
 }}
-QGroupBox::title {{ subcontrol-origin: margin; left: 12px; padding: 0 6px; }}
+QGroupBox::title {{
+    subcontrol-origin: margin; left: {S(14)}px; padding: 0 {S(6)}px;
+}}
 
-/* ── Checkboxes ── */
-QCheckBox {{ color: {T['text']}; spacing: 8px; }}
+/* ── CheckBox ── */
+QCheckBox {{ color: {T['text']}; spacing: {S(8)}px; font-size: {S(13)}px; }}
 QCheckBox::indicator {{
-    width: 16px; height: 16px;
-    border-radius: {R_XS}px;
+    width: {S(18)}px; height: {S(18)}px;
+    border-radius: {S(5)}px;
     border: 1.5px solid {T['border']};
     background: {T['panel']};
 }}
 QCheckBox::indicator:checked {{
-    background: {T['accent']}; border: 1.5px solid {T['accent']};
+    background: {T['accent']}; border-color: {T['accent']};
 }}
-QCheckBox::indicator:hover {{ border: 1.5px solid {T['text_dim']}; }}
+QCheckBox::indicator:hover {{ border-color: {T['accent']}; }}
 
-/* ── LineEdit (diálogos) ── */
+/* ── LineEdit global ── */
 QLineEdit {{
     background: {T['panel']}; color: {T['text']};
-    border: 1.5px solid {T['border']}; border-radius: {R_SM}px;
-    padding: 5px 10px; font-size: 13px;
+    border: 1.5px solid {T['border']}; border-radius: {S(8)}px;
+    padding: {S(6)}px {S(12)}px; font-size: {S(14)}px;
     selection-background-color: {T['accent']}; selection-color: {T['bg']};
 }}
-QLineEdit:focus {{ border: 1.5px solid {T['accent']}; }}
+QLineEdit:focus {{ border: 1.5px solid {T['accent']}; background: {T['surface']}; }}
+QLineEdit:hover:!focus {{ border: 1.5px solid {T['text_dim']}; }}
 
-/* ── QListWidget (dialogs) ── */
+/* ── QListWidget (diálogos) ── */
 QListWidget {{
     background: {T['surface']}; color: {T['text']};
-    border: 1px solid {T['border']}; border-radius: {R_SM}px;
-    outline: none;
+    border: 1px solid {T['border']}; border-radius: {S(8)}px;
+    outline: none; padding: {S(4)}px;
 }}
-QListWidget::item {{ padding: 5px 8px; border-radius: {R_XS}px; }}
+QListWidget::item {{
+    padding: {S(6)}px {S(10)}px; border-radius: {S(6)}px;
+    min-height: {S(24)}px;
+}}
 QListWidget::item:selected {{ background: {T['sel_bg']}; color: {T['sel_text']}; }}
-QListWidget::item:hover {{ background: {T['overlay']}; }}
+QListWidget::item:hover:!selected {{ background: {T['overlay']}; }}
 
 /* ── Splitter ── */
-QSplitter::handle {{ background: {T['border']}; width: 1px; }}
+QSplitter::handle {{ background: {T['border']}; width: 1px; height: 1px; }}
 
-/* ── Status bar ── */
+/* ── Barra de estado ── */
 QStatusBar {{
     background: {T['surface']};
     color: {T['text_dim']};
-    font-size: 12px;
+    font-size: {S(12)}px;
+    padding: 0 {S(8)}px;
     border-top: 1px solid {T['border']};
+    min-height: {S(28)}px;
 }}
 QStatusBar::item {{ border: none; }}
+
+/* ── ProgressBar ── */
+QProgressBar {{
+    background: {T['overlay']}; border-radius: {S(4)}px;
+    border: none;
+}}
+QProgressBar::chunk {{
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {T['accent']}, stop:1 {T['accent2']});
+    border-radius: {S(4)}px;
+}}
+
+/* ── SpinBox / ComboBox ── */
+QSpinBox, QDoubleSpinBox, QComboBox {{
+    background: {T['panel']}; color: {T['text']};
+    border: 1.5px solid {T['border']}; border-radius: {S(8)}px;
+    padding: {S(5)}px {S(10)}px; font-size: {S(14)}px;
+    min-height: {S(32)}px;
+}}
+QSpinBox:focus, QComboBox:focus {{ border-color: {T['accent']}; }}
+QComboBox::drop-down {{ border: none; padding-right: {S(8)}px; }}
+QComboBox QAbstractItemView {{
+    background: {T['panel']}; color: {T['text']};
+    border: 1px solid {T['border']}; border-radius: {S(8)}px;
+    selection-background-color: {T['sel_bg']};
+}}
 """
 
 
-# ── Paleta QPalette ───────────────────────────────────────────
+# ── Builder: botón ────────────────────────────────────────────
+
+def btn_qss(T: dict, variant: str = "default") -> str:
+    if variant == "accent":
+        bg, fg     = T["accent"],   T["bg"]
+        hbg, hfg   = T["accent2"],  T["bg"]
+    elif variant == "ghost":
+        bg, fg     = "transparent", T["text_sub"]
+        hbg, hfg   = T["overlay"],  T["text"]
+    elif variant == "danger":
+        bg, fg     = T["overlay"],  T["warning"]
+        hbg, hfg   = T["warning"],  T["bg"]
+    else:
+        bg, fg     = T["overlay"],  T["text"]
+        hbg, hfg   = T["accent"],   T["bg"]
+    return f"""
+QPushButton {{
+    background: {bg}; color: {fg};
+    border: none; border-radius: {S(7)}px;
+    font-family: "{FONT_UI}"; font-size: {S(13)}px;
+    padding: {S(5)}px {S(14)}px;
+    min-height: {S(30)}px;
+}}
+QPushButton:hover    {{ background: {hbg}; color: {hfg}; }}
+QPushButton:pressed  {{ background: {T['accent2']}; color: {T['bg']}; }}
+QPushButton:disabled {{ background: {T['surface']}; color: {T['text_dim']}; opacity: 0.5; }}
+"""
+
+
+# ── Builder: input ────────────────────────────────────────────
+
+def input_qss(T: dict) -> str:
+    return f"""
+QLineEdit {{
+    background: {T['panel']}; color: {T['text']};
+    border: 1.5px solid {T['border']}; border-radius: {S(22)}px;
+    font-family: "{FONT_UI}"; font-size: {S(14)}px;
+    padding: {S(7)}px {S(18)}px;
+    selection-background-color: {T['accent']}; selection-color: {T['bg']};
+}}
+QLineEdit:focus {{
+    border: 1.5px solid {T['accent']};
+    background: {T['surface']};
+}}
+QLineEdit:hover:!focus {{ border: 1.5px solid {T['text_dim']}; }}
+"""
+
+
+# ── QPalette ─────────────────────────────────────────────────
 
 def apply_palette(app, T: dict):
     app.setStyle("Fusion")
@@ -265,5 +361,4 @@ def apply_palette(app, T: dict):
     p.setColor(QPalette.ToolTipText,     QColor(T["text_sub"]))
     p.setColor(QPalette.PlaceholderText, QColor(T["text_dim"]))
     app.setPalette(p)
-    font = QFont(FONT_UI, 10)
-    app.setFont(font)
+    app.setFont(QFont(FONT_UI, S(10)))

@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTextEdit, QScrollArea, QFrame, QProgressBar, QStackedWidget,
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt5.QtGui import QPixmap, QFont, QColor, QSyntaxHighlighter, QTextCharFormat
 
 # ── open-count persistence ────────────────────────────────────
@@ -357,46 +357,40 @@ class _MediaWidget(QWidget):
                 pass
 
 
-# ── theme constants ───────────────────────────────────────────
+# ── tema activo (se actualiza con set_theme) ─────────────────
 
-_T = {
-    "bg":       "#1e1e2e",
-    "sidebar":  "#181825",
-    "panel":    "#24243e",
-    "accent":   "#cba6f7",
-    "accent2":  "#89b4fa",
-    "text":     "#cdd6f4",
-    "text_dim": "#6c7086",
-    "hover":    "#313244",
-    "border":   "#313244",
-}
+from ui.theme import DARK as _DEFAULT_T
+_T = dict(_DEFAULT_T)
 
-_BTN = f"""
+
+def _btn_style(T: dict) -> str:
+    return f"""
 QPushButton {{
-    background:{_T['hover']}; color:{_T['text']};
-    border:none; border-radius:5px;
+    background:{T['hover']}; color:{T['text']};
+    border:none; border-radius:6px;
     font-size:12px; padding:3px 8px;
 }}
-QPushButton:hover {{ background:{_T['accent']}; color:{_T['bg']}; }}
-QPushButton:pressed {{ background:{_T['accent2']}; }}
+QPushButton:hover {{ background:{T['accent']}; color:{T['bg']}; }}
+QPushButton:pressed {{ background:{T['accent2']}; color:{T['bg']}; }}
+QPushButton:checked {{
+    background:{T['accent']}; color:{T['bg']}; font-weight:bold;
+}}
+QPushButton:checked:hover {{ background:{T['accent2']}; color:{T['bg']}; }}
+QPushButton:checked:pressed {{ background:{T['accent2']}; color:{T['bg']}; }}
 """
 
-_BTN_PIN_ON = f"""
-QPushButton {{
-    background:{_T['accent']}; color:{_T['bg']};
-    border:none; border-radius:5px;
-    font-size:12px; padding:3px 8px; font-weight:bold;
-}}
-"""
+
+_BTN = _btn_style(_T)
 
 
 # ── main panel ────────────────────────────────────────────────
 
 class PreviewPanel(QWidget):
-    request_search   = pyqtSignal(str)
-    request_trace    = pyqtSignal(str)
-    request_favorite = pyqtSignal(str)
-    request_location = pyqtSignal(str)
+    request_search     = pyqtSignal(str)
+    request_trace      = pyqtSignal(str)
+    request_favorite   = pyqtSignal(str)
+    request_unfavorite = pyqtSignal(str)
+    request_location   = pyqtSignal(str)
 
     # QStackedWidget indices
     _EMPTY = 0; _IMAGE = 1; _TEXT = 2; _PDF = 3; _MEDIA = 4; _UNKNOWN = 5
@@ -405,11 +399,13 @@ class PreviewPanel(QWidget):
         super().__init__(parent)
         self.setMinimumWidth(240)
         self.setMaximumWidth(440)
-        self._pinned     = False
-        self._current    = None
-        self._loader     = None
-        self._media_w    = None
-        self._hl         = None   # syntax highlighter (keeps reference so GC doesn't kill it)
+        self._pinned      = False
+        self._current     = None
+        self._loader      = None
+        self._media_w     = None
+        self._hl          = None
+        self._meta_keys:  list = []   # etiquetas clave de metadatos (para re-estilizar)
+        self._action_btns: list = []  # todos los botones de la barra de acciones
         self._build_ui()
 
     # ── build ui ─────────────────────────────────────────────
@@ -437,11 +433,16 @@ class PreviewPanel(QWidget):
         bl.setContentsMargins(12, 8, 12, 8)
         bl.setSpacing(6)
 
-        # file icon + name
+        # tipo de archivo + nombre
         nr = QHBoxLayout()
-        self._icon = QLabel("📄")
-        self._icon.setStyleSheet("font-size:22px;")
-        self._icon.setFixedWidth(30)
+        nr.setSpacing(8)
+        self._icon = QLabel("—")
+        self._icon.setFixedSize(36, 20)
+        self._icon.setAlignment(Qt.AlignCenter)
+        self._icon.setStyleSheet(
+            "background:#44446a; color:#ebebf5; font-size:9px; font-weight:700;"
+            "border-radius:4px; letter-spacing:0.5px;"
+        )
         self._name = QLabel("Sin selección")
         self._name.setStyleSheet(f"color:{_T['text']};font-size:13px;font-weight:bold;")
         self._name.setWordWrap(True)
@@ -528,27 +529,34 @@ class PreviewPanel(QWidget):
         lay = QHBoxLayout(h)
         lay.setContentsMargins(10, 4, 10, 4)
 
-        title = QLabel("Vista Previa")
-        title.setStyleSheet(
+        self._header_title = QLabel("Vista Previa")
+        self._header_title.setStyleSheet(
             f"color:{_T['accent']};font-size:12px;font-weight:bold;letter-spacing:0.5px;"
         )
-        lay.addWidget(title)
+        lay.addWidget(self._header_title)
         lay.addStretch()
 
-        self._pin_btn = QPushButton("📌")
+        from ui.icons import tinted_icon as _ti
+        self._pin_btn = QPushButton()
         self._pin_btn.setFixedSize(26, 26)
         self._pin_btn.setCheckable(True)
         self._pin_btn.setToolTip("Fijar vista previa")
+        self._pin_btn.setIcon(_ti("pin", _T["text_sub"]))
+        self._pin_btn.setIconSize(QSize(14, 14))
         self._pin_btn.setStyleSheet(_BTN)
         self._pin_btn.clicked.connect(self._toggle_pin)
         lay.addWidget(self._pin_btn)
 
-        hide = QPushButton("✕")
-        hide.setFixedSize(26, 26)
-        hide.setToolTip("Ocultar panel")
-        hide.setStyleSheet(_BTN)
-        hide.clicked.connect(self.hide)
-        lay.addWidget(hide)
+        self._hide_btn = QPushButton()
+        self._hide_btn.setFixedSize(26, 26)
+        self._hide_btn.setToolTip("Ocultar panel")
+        self._hide_btn.setIcon(_ti("x", _T["text_sub"]))
+        self._hide_btn.setIconSize(QSize(14, 14))
+        self._hide_btn.setStyleSheet(_BTN)
+        self._hide_btn.clicked.connect(self.hide)
+        lay.addWidget(self._hide_btn)
+
+        self._header_w = h
         return h
 
     def _make_meta(self) -> QWidget:
@@ -558,11 +566,11 @@ class PreviewPanel(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(4)
 
-        lbl = QLabel("INFORMACIÓN")
-        lbl.setStyleSheet(
+        self._meta_info_lbl = QLabel("INFORMACIÓN")
+        self._meta_info_lbl.setStyleSheet(
             f"color:{_T['text_dim']};font-size:10px;font-weight:bold;letter-spacing:1px;"
         )
-        lay.addWidget(lbl)
+        lay.addWidget(self._meta_info_lbl)
 
         self._m_path  = self._meta_row(lay, "Ruta:")
         self._m_ctime = self._meta_row(lay, "Creado:")
@@ -572,13 +580,13 @@ class PreviewPanel(QWidget):
         self._m_extra = self._meta_row(lay, "Detalle:")
         return w
 
-    @staticmethod
-    def _meta_row(parent_lay: QVBoxLayout, label: str) -> QLabel:
+    def _meta_row(self, parent_lay: QVBoxLayout, label: str) -> QLabel:
         row = QHBoxLayout()
         row.setSpacing(4)
         key = QLabel(label)
         key.setFixedWidth(72)
         key.setStyleSheet(f"color:{_T['text_dim']};font-size:11px;")
+        self._meta_keys.append(key)
         val = QLabel("—")
         val.setWordWrap(True)
         val.setStyleSheet(f"color:{_T['text']};font-size:11px;")
@@ -588,25 +596,39 @@ class PreviewPanel(QWidget):
         return val
 
     def _make_actions(self) -> QWidget:
+        from ui.icons import tinted_icon as _ti
         bar = QWidget()
         bar.setFixedHeight(40)
-        bar.setStyleSheet(f"background:{_T['panel']};")
+        bar.setStyleSheet(
+            f"background:{_T['panel']};border-top:1px solid {_T['border']};"
+        )
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(6)
-        for icon, tip, slot in (
-            ("🔍", "Superbúsqueda inteligente", self._do_search),
-            ("📍", "Rastrear uso del archivo",  self._do_trace),
-            ("⭐", "Agregar a favoritos",        self._do_favorite),
-            ("📂", "Abrir ubicación",            self._do_location),
-        ):
-            b = QPushButton(icon)
+
+        _ICON_SIZE = QSize(15, 15)
+        _tint = _T["text_sub"]
+
+        def _abtn(icon_name: str, tip: str, slot, checkable=False) -> QPushButton:
+            b = QPushButton()
             b.setFixedSize(30, 28)
             b.setToolTip(tip)
+            b.setIcon(_ti(icon_name, _tint))
+            b.setIconSize(_ICON_SIZE)
             b.setStyleSheet(_BTN)
+            b.setCheckable(checkable)
             b.clicked.connect(slot)
             lay.addWidget(b)
+            self._action_btns.append(b)
+            return b
+
+        _abtn("search",      "Superbúsqueda",             self._do_search)
+        _abtn("git-branch",  "Rastrear uso del archivo",  self._do_trace)
+        self._star_btn   = _abtn("star",        "Agregar / quitar favorito",  self._do_favorite, checkable=True)
+        self._folder_btn = _abtn("folder-open", "Abrir carpeta del archivo",  self._do_location, checkable=True)
+
         lay.addStretch()
+        self._action_bar = bar
         return bar
 
     @staticmethod
@@ -618,9 +640,71 @@ class PreviewPanel(QWidget):
 
     # ── pin / action slots ────────────────────────────────────
 
+    def set_theme(self, T: dict):
+        global _T, _BTN
+        _T   = T
+        _BTN = _btn_style(T)
+
+        # panel principal
+        self.setStyleSheet(
+            f"background:{T['sidebar']}; border-left:1px solid {T['border']};"
+        )
+        # header
+        self._header_w.setStyleSheet(
+            f"background:{T['panel']};border-bottom:1px solid {T['border']};"
+        )
+        self._header_title.setStyleSheet(
+            f"color:{T['accent']};font-size:12px;font-weight:bold;"
+            f"letter-spacing:0.5px;background:transparent;"
+        )
+        from ui.icons import tinted_icon as _ti
+        _icon_sz = QSize(14, 14)
+        _action_sz = QSize(15, 15)
+        tint = T["text_sub"]
+        self._pin_btn.setIcon(_ti("pin", tint)); self._pin_btn.setIconSize(_icon_sz)
+        self._pin_btn.setStyleSheet(_BTN)
+        self._hide_btn.setIcon(_ti("x", tint)); self._hide_btn.setIconSize(_icon_sz)
+        self._hide_btn.setStyleSheet(_BTN)
+
+        # barra de acciones
+        self._action_bar.setStyleSheet(
+            f"background:{T['panel']};border-top:1px solid {T['border']};"
+        )
+        _action_icons = ["search", "git-branch", "star", "folder-open"]
+        for b, iname in zip(self._action_btns, _action_icons):
+            b.setIcon(_ti(iname, tint))
+            b.setIconSize(_action_sz)
+            b.setStyleSheet(_BTN)
+
+        # nombre del archivo
+        self._name.setStyleSheet(
+            f"color:{T['text']};font-size:13px;font-weight:bold;background:transparent;"
+        )
+
+        # sección de metadatos
+        self._meta_info_lbl.setStyleSheet(
+            f"color:{T['text_dim']};font-size:10px;font-weight:bold;"
+            f"letter-spacing:1px;background:transparent;"
+        )
+        for key in self._meta_keys:
+            key.setStyleSheet(f"color:{T['text_dim']};font-size:11px;background:transparent;")
+        for val in (self._m_path, self._m_ctime, self._m_mtime,
+                    self._m_size, self._m_opens, self._m_extra):
+            val.setStyleSheet(f"color:{T['text']};font-size:11px;background:transparent;")
+
+        # text edit (código / texto)
+        self._txt.setStyleSheet(
+            f"QTextEdit{{background:{T['panel']};color:{T['text']};"
+            f"border:1px solid {T['border']};border-radius:6px;padding:6px;}}"
+        )
+        # progress bar
+        self._bar.setStyleSheet(
+            f"QProgressBar{{background:{T['border']};border-radius:2px;border:none;}}"
+            f"QProgressBar::chunk{{background:{T['accent']};border-radius:2px;}}"
+        )
+
     def _toggle_pin(self, checked: bool):
         self._pinned = checked
-        self._pin_btn.setStyleSheet(_BTN_PIN_ON if checked else _BTN)
         self._pin_btn.setToolTip(
             "Fijado — la vista no se actualiza" if checked else "Fijar vista previa"
         )
@@ -631,10 +715,18 @@ class PreviewPanel(QWidget):
     def _do_trace(self):
         if self._current: self.request_trace.emit(self._current)
 
-    def _do_favorite(self):
-        if self._current: self.request_favorite.emit(self._current)
+    def _do_favorite(self, checked: bool):
+        if not self._current:
+            self._star_btn.setChecked(False)
+            return
+        if checked:
+            self._star_btn.setToolTip("Quitar de favoritos")
+            self.request_favorite.emit(self._current)
+        else:
+            self._star_btn.setToolTip("Agregar a favoritos")
+            self.request_unfavorite.emit(self._current)
 
-    def _do_location(self):
+    def _do_location(self, checked: bool):
         if self._current:
             self.request_location.emit(str(Path(self._current).parent))
 
@@ -644,6 +736,9 @@ class PreviewPanel(QWidget):
         if self._pinned or path == self._current:
             return
         self._current = path
+        self._star_btn.setChecked(False)
+        self._star_btn.setToolTip("Agregar a favoritos")
+        self._folder_btn.setChecked(False)
         increment_open_count(path)
         self._stop_media()
         self._hl = None
@@ -661,10 +756,17 @@ class PreviewPanel(QWidget):
 
     def clear(self):
         self._current = None
+        self._star_btn.setChecked(False)
+        self._star_btn.setToolTip("Agregar a favoritos")
+        self._folder_btn.setChecked(False)
         self._stop_media()
         self._stack.setCurrentIndex(self._EMPTY)
         self._name.setText("Sin selección")
-        self._icon.setText("📄")
+        self._icon.setText("—")
+        self._icon.setStyleSheet(
+            "background:#44446a; color:#ebebf5; font-size:9px; font-weight:700;"
+            "border-radius:4px; letter-spacing:0.5px;"
+        )
 
     # ── result handler ────────────────────────────────────────
 
@@ -672,10 +774,22 @@ class PreviewPanel(QWidget):
         if d["path"] != self._current:
             return
 
-        _icons = {"image": "🖼", "video": "🎬", "audio": "🎵",
-                  "pdf": "📕", "code": "💻", "text": "📄"}
+        _labels = {
+            "image":   ("IMG", "#2ec4a0"),
+            "video":   ("VID", "#7b6cf6"),
+            "audio":   ("AUD", "#f26d6a"),
+            "pdf":     ("PDF", "#d93a3a"),
+            "code":    ("COD", "#4fa4f8"),
+            "text":    ("TXT", "#5244cc"),
+            "unknown": ("???", "#9898ba"),
+        }
         ftype = d.get("ftype", "unknown")
-        self._icon.setText(_icons.get(ftype, "📄"))
+        label, color = _labels.get(ftype, ("???", "#9898ba"))
+        self._icon.setText(label)
+        self._icon.setStyleSheet(
+            f"background:{color}; color:#ffffff; font-size:9px; font-weight:700;"
+            f"border-radius:4px; letter-spacing:0.5px;"
+        )
         self._name.setText(d.get("name", Path(d["path"]).name))
 
         self._m_path.setText(d["path"])
