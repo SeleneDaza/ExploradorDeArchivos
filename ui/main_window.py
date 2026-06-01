@@ -107,7 +107,6 @@ class MainWindow(QMainWindow):
 
         self.preview = PreviewPanel()
         self.preview.request_search.connect(lambda p: self._on_search(Path(p).name))
-        self.preview.request_trace.connect(self._start_trace)
         self.preview.request_location.connect(self._navigate)
         self._splitter.addWidget(self.preview)
 
@@ -302,7 +301,7 @@ class MainWindow(QMainWindow):
         elif len(paths) == 1:
             selected = paths[0]
             if Path(selected).is_file():
-                menu.addAction("Rastrear uso", lambda: self._start_trace(selected))
+
                 menu.addSeparator()
             menu.addAction("Personalizar apariencia", lambda: self._personalize(selected))
             menu.addSeparator()
@@ -473,19 +472,6 @@ class MainWindow(QMainWindow):
             self.status.showMessage(f"   {result['result']}")
         else:
             QMessageBox.warning(self, "Error", result["error"])
-
-    def _start_trace(self, path: str):
-        try:
-            from ui.widgets.file_trace_panel import FileTracePanel
-            dlg = FileTracePanel(parent=self)
-            roots = [self.fs.get_current_path(), str(Path.home())]
-            exclude = [".git", "node_modules", "__pycache__", ".venv", "venv"]
-            exc_pat = ["*.pyc", "*.pyo", "*.class", "*.exe"]
-            dlg.start_trace(path, roots=roots, exclude_dirs=exclude,
-                            exclude_file_patterns=exc_pat)
-            dlg.exec_()
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"No se pudo iniciar el rastreo: {e}")
 
     # ── tema ──────────────────────────────────────────────────
 

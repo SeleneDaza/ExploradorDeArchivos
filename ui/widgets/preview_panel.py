@@ -387,7 +387,6 @@ _BTN = _btn_style(_T)
 
 class PreviewPanel(QWidget):
     request_search     = pyqtSignal(str)
-    request_trace      = pyqtSignal(str)
     request_favorite   = pyqtSignal(str)
     request_unfavorite = pyqtSignal(str)
     request_location   = pyqtSignal(str)
@@ -623,7 +622,6 @@ class PreviewPanel(QWidget):
             return b
 
         _abtn("search",      "Superbúsqueda",             self._do_search)
-        _abtn("git-branch",  "Rastrear uso del archivo",  self._do_trace)
         self._star_btn   = _abtn("star",        "Agregar / quitar favorito",  self._do_favorite, checkable=True)
         self._folder_btn = _abtn("folder-open", "Abrir carpeta del archivo",  self._do_location, checkable=True)
 
@@ -712,8 +710,6 @@ class PreviewPanel(QWidget):
     def _do_search(self):
         if self._current: self.request_search.emit(self._current)
 
-    def _do_trace(self):
-        if self._current: self.request_trace.emit(self._current)
 
     def _do_favorite(self, checked: bool):
         if not self._current:
