@@ -16,7 +16,7 @@ class PersonalizeDialog(QDialog):
         self._path = path
         self._T    = T
         self._p    = Personalizer()
-        self.setWindowTitle(f"Personalizar — {Path(path).name}")
+        self.setWindowTitle(f"Etiquetas personalizadas — {Path(path).name}")
         self.setMinimumWidth(S(420))
         self.setStyleSheet(global_qss(T))
         self._build()

@@ -304,7 +304,7 @@ class MainWindow(QMainWindow):
             if Path(selected).is_file():
 
                 menu.addSeparator()
-            menu.addAction("Personalizar apariencia", lambda: self._personalize(selected))
+            menu.addAction("Etiquetas personalizadas", lambda: self._personalize(selected))
             menu.addSeparator()
             menu.addAction("Renombrar       F2",  lambda: self._rename(selected))
             menu.addAction("Copiar",              lambda: self._copy(selected))

@@ -1,6 +1,6 @@
 # Explorador de Archivos
 
-Explorador de archivos de escritorio desarrollado con Python y PyQt5, orientado a productividad y organización visual. Ofrece una interfaz moderna con soporte para múltiples temas, vista previa de archivos, personalización visual por ítem y análisis de duplicados y referencias.
+Explorador de archivos de escritorio desarrollado con Python y PyQt5, orientado a productividad y organización visual. Ofrece una interfaz moderna con soporte para múltiples temas, vista previa de archivos y personalización visual por ítem.
 
 ---
 
@@ -87,7 +87,6 @@ ExploradorDeArchivos/
 |   +-- operations.py              # Copiar, mover, renombrar, eliminar, crear
 |   +-- permissions.py             # Lectura y escritura de permisos (chmod/chown)
 |   +-- personalizer.py            # Etiquetas de color e insignias por archivo
-|   +-- tracker.py                 # Deteccion de duplicados y rastreo de referencias
 |
 +-- ui/                            # Interfaz grafica
 |   +-- theme.py                   # Paletas de color, tokens de diseno, zoom
@@ -106,13 +105,11 @@ ExploradorDeArchivos/
 |   |   +-- permissions_dialog.py  # Editor de permisos
 |   |   +-- properties_dialog.py   # Propiedades del archivo
 |   |   +-- compare_dialog.py      # Comparacion de archivos
-|   |   +-- trace_settings_dialog.py # Configuracion del rastreador
 |   |
 |   +-- widgets/
 |       +-- favorites_panel.py     # Panel lateral de ubicaciones favoritas
 |       +-- preview_panel.py       # Panel de vista previa con metadatos
 |       +-- search_bar.py          # Barra de busqueda por nombre
-|       +-- file_trace_panel.py    # Panel de rastreo de duplicados y referencias
 |       +-- my_personalizations.py # Gestion de personalizaciones guardadas
 |
 +-- requirements.txt
@@ -172,11 +169,6 @@ ExploradorDeArchivos/
 - Las personalizaciones persisten entre sesiones
 - Al renombrar o mover un archivo dentro del explorador, la personalizacion se migra automaticamente a la nueva ruta
 
-### Rastreo de archivos
-- Detecta **archivos duplicados** por contenido (hash SHA-256) en una o varias carpetas raiz
-- Encuentra **referencias** al archivo seleccionado desde codigo fuente (HTML, CSS, JavaScript, Python)
-- Panel con barra de progreso, posibilidad de cancelar y configuracion de exclusiones
-- Cache de hashes en disco para acelerar analisis repetidos
 
 ### Permisos
 - Visualizacion de permisos en formato simbolico (rwxrwxrwx) y octal
@@ -231,8 +223,6 @@ La aplicacion guarda configuracion y cache en:
 ~/.explorador_cache/
     personalizations.json    Etiquetas de color e insignias por archivo
     open_counts.json         Contador de aperturas por archivo
-    hash_cache.json          Cache de hashes para el rastreador de duplicados
-    trace_settings.json      Configuracion del rastreador (carpetas raiz, exclusiones)
 ```
 
 Estos archivos se crean automaticamente en el primer uso. No requieren configuracion manual. Pueden eliminarse de forma segura para restablecer los valores por defecto.
@@ -244,6 +234,5 @@ Estos archivos se crean automaticamente en el primer uso. No requieren configura
 - En **Windows**, la apertura de archivos usa `os.startfile()`.
 - En **Linux y macOS**, la apertura usa `xdg-open` y `open` respectivamente.
 - Los permisos `chmod` y `chown` tienen efecto completo en **Linux y macOS**. En Windows se aplican unicamente los bits disponibles a traves de `os.chmod`.
-- El rastreo de referencias entre archivos soporta: `.html`, `.htm`, `.css`, `.scss`, `.js`, `.ts`, `.py`.
 - La vista previa de PDF requiere `PyMuPDF`. Sin el, se muestra un mensaje de tipo desconocido.
 - La miniatura de video requiere `opencv-python`. Sin el, se muestra el nombre del archivo sin imagen.
