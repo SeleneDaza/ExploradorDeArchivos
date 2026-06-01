@@ -1,7 +1,7 @@
-import os
-import sys
-import shutil
-import subprocess
+import os #módulo para interactuar con el SO
+import sys #módulo para detectar el SO
+import shutil #módulo para operacioes de archivos de alto nivel
+import subprocess #módulo para ejecutar comandos del sistema operativo
 from pathlib import Path
 
 
@@ -9,9 +9,17 @@ class Operations:
 
     def sudo_run(self, cmd: list[str], password: str) -> dict:
         """Ejecuta cmd con sudo -S en Linux, pasando la contraseña por stdin."""
+        # solo funciona en Linux, sudo no existe en Windows
         if sys.platform != "linux":
             return {"ok": False, "error": "Elevación de privilegios solo disponible en Linux"}
         try:
+            # subprocess.run() ejecuta un comando en la terminal de Linux
+            # equivale a escribir "sudo comando" en la terminal
+            # ["sudo", "-S", "--"] + cmd ejecuta el comando con privilegios de administrador
+            # "-S" le dice a sudo que lea la contraseña desde la entrada estándar (stdin)
+            # input=password + "\n" pasa la contraseña automáticamente sin que el usuario la escriba
+            # capture_output=True captura la salida del comando para procesarla
+            # timeout=15 espera máximo 15 segundos antes de cancelar
             r = subprocess.run(
                 ["sudo", "-S", "--"] + cmd,
                 input=password + "\n",
@@ -19,6 +27,7 @@ class Operations:
                 text=True,
                 timeout=15,
             )
+            # returncode == 0 significa que el comando se ejecutó exitosamente en Linux
             if r.returncode == 0:
                 return {"ok": True, "result": "Operación completada con privilegios de administrador"}
             stderr = r.stderr.lower()
@@ -41,6 +50,7 @@ class Operations:
             return {"ok": False, "error": f"No existe: {source}"}
 
         try:
+            # Path.is_dir() verifica si el destino es una carpeta
             if dst.is_dir():
                 dst = dst / src.name
 
@@ -48,13 +58,19 @@ class Operations:
                 return {"ok": False, "error": f"Ya existe: {dst.name}"}
 
             if src.is_dir():
+                # shutil.copytree() equivale a "cp -r carpeta destino" en Linux
+                # copia una carpeta completa con todo su contenido
                 shutil.copytree(src, dst)
             else:
+                # shutil.copy2() equivale a "cp -p archivo destino" en Linux
+                # copia un archivo preservando sus metadatos (fechas, permisos)
                 shutil.copy2(src, dst)
 
             return {"ok": True, "result": str(dst)}
 
         except PermissionError:
+            # si no hay permisos, sugiere ejecutar con sudo
+            # "cp -r" copia carpetas, "cp" copia archivos
             cmd = ["cp", "-r", str(src), str(dst)] if src.is_dir() else ["cp", str(src), str(dst)]
             return {"ok": False, "error": "Permiso denegado", "needs_sudo": True, "sudo_cmd": cmd}
         except Exception as e:
@@ -74,10 +90,13 @@ class Operations:
             if dst.exists():
                 return {"ok": False, "error": f"Ya existe: {dst.name}"}
 
+            # shutil.move() equivale a "mv archivo destino" en Linux
+            # mueve un archivo o carpeta de un lugar a otro
             shutil.move(str(src), str(dst))
             return {"ok": True, "result": str(dst)}
 
         except PermissionError:
+            # si no hay permisos, sugiere ejecutar "mv" con sudo
             return {"ok": False, "error": "Permiso denegado", "needs_sudo": True,
                     "sudo_cmd": ["mv", str(src), str(dst)]}
         except Exception as e:
@@ -92,6 +111,8 @@ class Operations:
         if not new_name.strip():
             return {"ok": False, "error": "El nombre no puede estar vacío"}
 
+        # os.sep es el separador de rutas del sistema
+        # en Linux es "/" — evita que el nuevo nombre contenga rutas
         if os.sep in new_name or "/" in new_name:
             return {"ok": False, "error": "El nombre no puede contener separadores"}
 
@@ -101,10 +122,13 @@ class Operations:
             return {"ok": False, "error": f"Ya existe: {new_name}"}
 
         try:
+            # src.rename() equivale a "mv archivo nuevo_nombre" en Linux
+            # renombra el archivo o carpeta
             src.rename(dst)
             return {"ok": True, "result": str(dst)}
 
         except PermissionError:
+            # si no hay permisos, sugiere ejecutar "mv" con sudo
             return {"ok": False, "error": "Permiso denegado", "needs_sudo": True,
                     "sudo_cmd": ["mv", str(src), str(dst)]}
         except Exception as e:
@@ -118,8 +142,12 @@ class Operations:
 
         try:
             if target.is_dir():
+                # shutil.rmtree() equivale a "rm -rf carpeta" en Linux
+                # elimina una carpeta y todo su contenido recursivamente
                 shutil.rmtree(target)
             else:
+                # target.unlink() equivale a "rm archivo" en Linux
+                # elimina un archivo individual
                 target.unlink()
 
             return {"ok": True, "result": f"Eliminado: {target.name}"}
@@ -134,6 +162,7 @@ class Operations:
         if not folder_name.strip():
             return {"ok": False, "error": "El nombre no puede estar vacío"}
 
+        # os.sep verifica que el nombre no contenga separadores de ruta
         if os.sep in folder_name or "/" in folder_name:
             return {"ok": False, "error": "El nombre no puede contener separadores"}
 
@@ -143,6 +172,8 @@ class Operations:
             return {"ok": False, "error": f"Ya existe: {folder_name}"}
 
         try:
+            # target.mkdir() equivale a "mkdir carpeta" en Linux
+            # crea una carpeta nueva
             target.mkdir(parents=False, exist_ok=False)
             return {"ok": True, "result": str(target)}
 
@@ -156,6 +187,7 @@ class Operations:
         if not file_name.strip():
             return {"ok": False, "error": "El nombre no puede estar vacío"}
 
+        # os.sep verifica que el nombre no contenga separadores de ruta
         if os.sep in file_name or "/" in file_name:
             return {"ok": False, "error": "El nombre no puede contener separadores"}
 
@@ -165,6 +197,8 @@ class Operations:
             return {"ok": False, "error": f"Ya existe: {file_name}"}
 
         try:
+            # target.touch() equivale a "touch archivo" en Linux
+            # crea un archivo vacío nuevo
             target.touch()
             return {"ok": True, "result": str(target)}
 

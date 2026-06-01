@@ -1,17 +1,18 @@
-import os
-import hashlib
-import time
-import pickle
+import os # módulo para interactuar con el SO
+import hashlib # módulo para calcular hashes de archivos
+import time  #módulo para manejar tiempos y caché
+import pickle  # módulo para serializar datos en disco
 from pathlib import Path
 from typing import List, Dict, Optional, Callable
-import fnmatch
-import re
+import fnmatch # módulo para filtrar archivos por patrones de nombre
+import re # módulo para buscar patrones de texto con expresiones regulares
 
-# Simple in-memory cache: key -> (timestamp, result)
+# caché en memoria: guarda resultados temporales para no repetir búsquedas
 _cache = {}
 CACHE_TTL = 60 * 5  # 5 minutes
 
-# disk cache
+# Path.home() equivale a "echo $HOME" en Linux
+# guarda los archivos de caché en la carpeta del usuario
 CACHE_DIR = Path.home() / ".explorador_cache"
 CACHE_FILE = CACHE_DIR / "tracker_cache.pickle"
 SETTINGS_FILE = CACHE_DIR / "settings.json"
@@ -21,6 +22,7 @@ SETTINGS = {}
 def _load_settings():
     global SETTINGS
     try:
+        # SETTINGS_FILE.exists() verifica si el archivo de configuración existe
         if SETTINGS_FILE.exists():
             import json
             with SETTINGS_FILE.open('r', encoding='utf-8') as f:
@@ -33,8 +35,11 @@ def _load_settings():
 
 def save_settings(new: dict):
     try:
+        # CACHE_DIR.mkdir() equivale a "mkdir -p carpeta" en Linux
+        # crea la carpeta de caché si no existe
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         import json
+        # abre el archivo de configuración para escribir
         with SETTINGS_FILE.open('w', encoding='utf-8') as f:
             json.dump(new, f, indent=2, ensure_ascii=False)
         _load_settings()
@@ -46,15 +51,18 @@ def get_settings() -> dict:
     return dict(SETTINGS)
 
 
-# load settings on import
+# carga la configuración al importar el módulo
 _load_settings()
 
 
 def _load_cache():
     global _cache
     try:
+        # verifica si el archivo de caché existe en disco
         if CACHE_FILE.exists():
+            # abre el archivo de caché en modo binario para leerlo
             with CACHE_FILE.open("rb") as f:
+                # pickle.load() deserializa los datos guardados en disco
                 _cache = pickle.load(f)
     except Exception:
         _cache = {}
@@ -62,21 +70,24 @@ def _load_cache():
 
 def _save_cache():
     try:
-        # only persist if settings allow it (default True)
         persist = SETTINGS.get('persist_cache', True) if isinstance(SETTINGS, dict) else True
+        # CACHE_DIR.mkdir() equivale a "mkdir -p carpeta" en Linux
         if persist:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
             with CACHE_FILE.open("wb") as f:
+                # pickle.dump() serializa y guarda los datos en disco
                 pickle.dump(_cache, f)
     except Exception:
         pass
 
 
-# load persisted cache on import
+# carga el caché guardado en disco al importar el módulo
 _load_cache()
 
 
 def _file_info(path: Path) -> Dict:
+    # path.stat() equivale a "stat archivo" en Linux
+    # lee los metadatos del archivo: tamaño y fecha de modificación
     st = path.stat()
     return {
         "path": str(path),
@@ -86,10 +97,14 @@ def _file_info(path: Path) -> Dict:
 
 
 def compute_hash(path: str, chunk_size: int = 1024 * 1024) -> str:
+    # hashlib.sha256() equivale a "sha256sum archivo" en Linux
+    # calcula una huella única del archivo para detectar duplicados
+    # si dos archivos tienen el mismo hash, son idénticos
     h = hashlib.sha256()
     p = Path(path)
     with p.open("rb") as f:
         while True:
+            # lee el archivo en bloques de 1MB para no saturar la memoria
             chunk = f.read(chunk_size)
             if not chunk:
                 break
@@ -103,6 +118,7 @@ def find_duplicates(target_path: str, roots: Optional[List[str]] = None,
                     cancel_checker: Optional[Callable[[], bool]] = None,
                     progress_callback: Optional[Callable[[int], None]] = None) -> List[Dict]:
     target = Path(target_path)
+    # verifica que el archivo objetivo existe
     if not target.exists() or not target.is_file():
         return []
 
@@ -116,35 +132,40 @@ def find_duplicates(target_path: str, roots: Optional[List[str]] = None,
         if now - ts < CACHE_TTL:
             return val
 
+    # target.stat().st_size equivale a "du -b archivo" en Linux
+    # obtiene el tamaño del archivo en bytes para comparar candidatos
     target_size = target.stat().st_size
     target_hash = compute_hash(str(target))
 
     if roots is None:
-        # default to user's home folder
+        # Path.home() equivale a "echo $HOME" en Linux
         roots = [str(Path.home())]
 
-    # First pass: build list of candidate files (matching size and not excluded)
     candidates = []
     for root in roots:
+        # os.walk() equivale a "find /ruta -type f" en Linux
+        # recorre recursivamente todas las carpetas buscando archivos
         for dirpath, dirnames, filenames in os.walk(root):
-            # prune dirnames according to exclude_dirs patterns/names
+            # fnmatch.fnmatch() filtra carpetas por patrones
+            # equivale a "find -name patron" en Linux
             dirnames[:] = [d for d in dirnames if not any(d == ex or fnmatch.fnmatch(d, ex) for ex in exclude_dirs)]
             for fname in filenames:
                 try:
-                    # check cancellation
                     if cancel_checker and cancel_checker():
                         return []
                 except Exception:
                     pass
-                # skip file patterns
                 if any(fnmatch.fnmatch(fname, pat) for pat in exclude_file_patterns):
                     continue
                 fpath = Path(dirpath) / fname
                 try:
                     if not fpath.is_file():
                         continue
+                    # fpath.resolve() equivale a "realpath archivo" en Linux
+                    # obtiene la ruta absoluta real del archivo
                     if fpath.resolve() == target.resolve():
                         continue
+                    # solo considera candidatos con el mismo tamaño
                     if fpath.stat().st_size != target_size:
                         continue
                     candidates.append(fpath)
@@ -194,7 +215,8 @@ def find_duplicates(target_path: str, roots: Optional[List[str]] = None,
 
 
 def is_text_file(path: str) -> bool:
-    # rudimentary check: try opening as text
+    # intenta abrir el archivo como texto para verificar si es legible
+    # equivale a "file archivo" en Linux que detecta el tipo de archivo
     try:
         with open(path, "r", encoding="utf-8") as f:
             f.read(1024)
@@ -418,7 +440,10 @@ def find_references(target_path: str, roots: Optional[List[str]] = None,
 def clear_cache():
     _cache.clear()
     try:
+        # CACHE_FILE.exists() verifica si el archivo de caché existe
         if CACHE_FILE.exists():
+            # CACHE_FILE.unlink() equivale a "rm archivo" en Linux
+            # elimina el archivo de caché del disco
             CACHE_FILE.unlink()
     except Exception:
         pass

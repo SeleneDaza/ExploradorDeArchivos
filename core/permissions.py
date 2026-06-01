@@ -1,16 +1,26 @@
-import os
-import stat
-import sys
+import os #módulo para interactuar con el SO
+import stat #módulo para interpretar bits de permisos
+import sys #módulo para detectar el sistema operativo
 from pathlib import Path
 
+# detecta si el sistema operativo es Windows
+# sys.platform == "win32" equivale a preguntar ¿estoy en Windows?
 _WINDOWS = sys.platform == "win32"
 
+
+# pwd y grp son módulos exclusivos de Linux
+# pwd maneja usuarios del sistema equivale a /etc/passwd en Linux
+# grp maneja grupos del sistema equivale a /etc/group en Linux
+# solo se importan si se está en Linux
 if not _WINDOWS:
     import pwd
     import grp
 
 
 def _owner_group_windows(path: str):
+    # función alternativa para obtener propietario y grupo en Windows
+    # usa win32security que es la API de seguridad de Windows
+    # en Linux esto no se necesita porque se usa pwd y grp directamente
     try:
         import win32security
         sd = win32security.GetFileSecurity(
@@ -24,6 +34,8 @@ def _owner_group_windows(path: str):
         return owner, group
     except Exception:
         try:
+            # os.getlogin() equivale a "whoami" en Linux
+            # obtiene el nombre del usuario actual
             return os.getlogin(), "N/A"
         except Exception:
             return "N/A", "N/A"
@@ -38,8 +50,10 @@ class Permissions:
             return {"ok": False, "error": f"No existe: {path}"}
 
         try:
+            # target.stat() equivale a "stat archivo" en Linux
+            # lee todos los metadatos del archivo: permisos, dueño, tamaño, fechas
             st = target.stat()
-            mode = st.st_mode
+            mode = st.st_mode # st_mode contiene los bits de permisos en formato numérico
 
             if _WINDOWS:
                 owner, group = _owner_group_windows(path)
@@ -47,15 +61,19 @@ class Permissions:
                 gid = 0
             else:
                 try:
+                    # pwd.getpwuid() equivale a "id -un" en Linux
+                    # convierte el UID numérico al nombre de usuario
                     owner = pwd.getpwuid(st.st_uid).pw_name
                 except KeyError:
                     owner = str(st.st_uid)
                 try:
+                    # grp.getgrgid() equivale a "id -gn" en Linux
+                    # convierte el GID numérico al nombre del grupo
                     group = grp.getgrgid(st.st_gid).gr_name
                 except KeyError:
                     group = str(st.st_gid)
-                uid = st.st_uid
-                gid = st.st_gid
+                uid = st.st_uid # UID: número identificador del usuario en Linux
+                gid = st.st_gid  # GID: número identificador del grupo en Linux
 
             return {
                 "ok":       True,
@@ -68,18 +86,27 @@ class Permissions:
                 "symbolic": self._to_symbolic(mode),
                 "bits": {
                     "owner": {
+                        # stat.S_IRUSR equivale al bit de lectura del propietario (r en rwx------)
                         "read":    bool(mode & stat.S_IRUSR),
+                        # stat.S_IWUSR equivale al bit de escritura del propietario (w en rwx------)
                         "write":   bool(mode & stat.S_IWUSR),
+                        # stat.S_IXUSR equivale al bit de ejecución del propietario (x en rwx------)
                         "execute": bool(mode & stat.S_IXUSR),
                     },
                     "group": {
+                        # stat.S_IRGRP equivale al bit de lectura del grupo (r en ---rwx---)
                         "read":    bool(mode & stat.S_IRGRP),
+                        # stat.S_IWGRP equivale al bit de escritura del grupo (w en ---rwx---)
                         "write":   bool(mode & stat.S_IWGRP),
+                        # stat.S_IXGRP equivale al bit de ejecución del grupo (x en ---rwx---)
                         "execute": bool(mode & stat.S_IXGRP),
                     },
                     "others": {
+                        # stat.S_IROTH equivale al bit de lectura de otros (r en ------rwx)
                         "read":    bool(mode & stat.S_IROTH),
+                        # stat.S_IWOTH equivale al bit de escritura de otros (w en ------rwx)
                         "write":   bool(mode & stat.S_IWOTH),
+                        # stat.S_IXOTH equivale al bit de ejecución de otros (x en ------rwx)
                         "execute": bool(mode & stat.S_IXOTH),
                     },
                 },
@@ -100,6 +127,8 @@ class Permissions:
             return {"ok": False, "error": f"Octal inválido: {octal}"}
 
         try:
+            # os.chmod() equivale a "chmod 755 archivo" en Linux
+            # cambia los permisos del archivo usando notación octal
             os.chmod(path, int(octal, 8))
             return {
                 "ok":       True,
@@ -113,8 +142,11 @@ class Permissions:
             return {"ok": False, "error": str(e)}
 
     def chmod_from_bits(self, path: str, bits: dict) -> dict:
+        # permite cambiar permisos usando checkboxes (True/False)
+        # en lugar de escribir el número octal directamente
         try:
             mode = 0
+            # mapeo de cada quien (propietario, grupo, otros) con sus bits
             mapping = {
                 "owner":  (stat.S_IRUSR, stat.S_IWUSR, stat.S_IXUSR),
                 "group":  (stat.S_IRGRP, stat.S_IWGRP, stat.S_IXGRP),
@@ -122,16 +154,19 @@ class Permissions:
             }
             for who, flags in mapping.items():
                 r, w, x = flags
+                # mode |= r activa el bit de lectura usando operación OR de bits
                 if bits.get(who, {}).get("read"):    mode |= r
                 if bits.get(who, {}).get("write"):   mode |= w
                 if bits.get(who, {}).get("execute"): mode |= x
 
+            # convierte el modo calculado a octal y llama a chmod
             return self.chmod(path, oct(mode)[-3:])
 
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
     def chown(self, path: str, owner: str = None, group: str = None) -> dict:
+        # chown no existe en Windows, se deshabilita con mensaje claro
         if _WINDOWS:
             return {"ok": False, "error": "chown no está disponible en Windows"}
 
@@ -144,8 +179,15 @@ class Permissions:
             return {"ok": False, "error": "Debes especificar owner, group o ambos"}
 
         try:
+            # pwd.getpwnam() equivale a "id -u usuario" en Linux
+            # convierte el nombre de usuario a su UID numérico
             uid = pwd.getpwnam(owner).pw_uid if owner else -1
+            # grp.getgrnam() equivale a "getent group nombre" en Linux
+            # convierte el nombre de grupo a su GID numérico
             gid = grp.getgrnam(group).gr_gid if group else -1
+            # os.chown() equivale a "chown usuario:grupo archivo" en Linux
+            # cambia el propietario y grupo del archivo
+            # requiere ser root (sudo) en Linux
             os.chown(path, uid, gid)
             return {
                 "ok":       True,
@@ -162,6 +204,7 @@ class Permissions:
 
     @staticmethod
     def _to_symbolic(mode: int) -> str:
+        # convierte el modo numérico a notación simbólica de Linux
         flags = [
             (stat.S_IRUSR, 'r'), (stat.S_IWUSR, 'w'), (stat.S_IXUSR, 'x'),
             (stat.S_IRGRP, 'r'), (stat.S_IWGRP, 'w'), (stat.S_IXGRP, 'x'),
@@ -171,4 +214,6 @@ class Permissions:
 
     @staticmethod
     def _valid_octal(octal: str) -> bool:
+        # valida que el octal tenga 3 o 4 dígitos y solo use números del 0 al 7
+        # en Linux los permisos válidos van de 000 a 777
         return len(octal) in (3, 4) and all(c in "01234567" for c in octal)

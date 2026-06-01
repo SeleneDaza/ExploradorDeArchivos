@@ -5,6 +5,8 @@ Persiste en ~/.explorador_cache/personalizations.json
 import json
 from pathlib import Path
 
+# Path.home() equivale a "echo $HOME" en Linux
+# obtiene la carpeta del usuario para guardar la configuración
 _CACHE_DIR = Path.home() / ".explorador_cache"
 _FILE      = _CACHE_DIR / "personalizations.json"
 
@@ -54,14 +56,19 @@ class Personalizer:
 
     def _load(self):
         try:
+             # _FILE.exists() verifica si el archivo de configuración ya existe
             if _FILE.exists():
+                # _FILE.read_text() lee el contenido del archivo JSON
                 self._data = json.loads(_FILE.read_text(encoding="utf-8"))
         except Exception:
             self._data = {}
 
     def _save(self):
         try:
+            # _CACHE_DIR.mkdir() equivale a "mkdir -p carpeta" en Linux
+            # crea la carpeta de caché si no existe
             _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            # _FILE.write_text() escribe/guarda el archivo JSON en disco
             _FILE.write_text(
                 json.dumps(self._data, ensure_ascii=False, indent=2),
                 encoding="utf-8",
