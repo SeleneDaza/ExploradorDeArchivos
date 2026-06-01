@@ -187,21 +187,57 @@ class FileItemDelegate(QStyledItemDelegate):
             else:
                 t = 0.0
             color = _heat_color(t)
-            color.setAlpha(80 if selected else 200)
-            inner = rect.adjusted(3, 3, -3, -3)
+            # más translúcido y estilo 'pill' alrededor del texto
+            color.setAlpha(100 if selected else 140)
             painter.setPen(Qt.NoPen)
-            painter.setBrush(color)
-            painter.drawRoundedRect(inner, 5, 5)
 
-        text = index.data(Qt.DisplayRole) or ""
-        if selected:
-            painter.setPen(option.palette.highlightedText().color())
+            # texto (usa el texto ya formateado si existe)
+            text = index.data(Qt.DisplayRole) or _fmt_size(size_b)
+            f = QFont(option.font)
+            f.setPointSize(max(8, f.pointSize()))
+            painter.setFont(f)
+            fm = painter.fontMetrics()
+            pad_x = 10
+            pad_y = 4
+            tw = fm.horizontalAdvance(text)
+            th = fm.height()
+
+            badge_w = tw + pad_x * 2
+            badge_h = th + pad_y
+            bx = rect.center().x() - badge_w // 2
+            by = rect.center().y() - badge_h // 2
+            badge = QRect(bx, by, badge_w, badge_h)
+
+            # fondo semi-transparente redondeado
+            painter.setBrush(color)
+            painter.drawRoundedRect(badge, badge_h // 2, badge_h // 2)
+
+            # borde sutil (oscurecer ligeramente el color)
+            edge = QColor(color)
+            edge.setAlpha(80)
+            pen = QPen(edge, 1)
+            pen.setJoinStyle(Qt.RoundJoin)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(badge.adjusted(0, 0, -1, -1), badge_h // 2, badge_h // 2)
+
+        # dibujar texto centrado en la pill si hay tamaño, sino text normal
+        if size_b >= 0:
+            # contraste del texto según luminancia del color
+            r, g, b, _a = color.red(), color.green(), color.blue(), color.alpha()
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+            text_col = option.palette.highlightedText().color() if selected else (
+                QColor("#1a1a2e") if lum > 180 else QColor("#ffffff")
+            )
+            painter.setPen(text_col)
+            painter.drawText(badge, Qt.AlignCenter, text)
         else:
-            painter.setPen(QColor("#1a1a2e") if size_b >= 0 else QColor("#707090"))
-        f = QFont(option.font)
-        f.setPointSize(max(8, f.pointSize()))
-        painter.setFont(f)
-        painter.drawText(rect, Qt.AlignCenter, text)
+            text = index.data(Qt.DisplayRole) or ""
+            painter.setPen(QColor("#707090"))
+            f = QFont(option.font)
+            f.setPointSize(max(8, f.pointSize()))
+            painter.setFont(f)
+            painter.drawText(rect, Qt.AlignCenter, text)
         painter.restore()
 
     def helpEvent(self, event, view, option, index):
