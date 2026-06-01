@@ -1,8 +1,9 @@
 from pathlib import Path
 from PyQt5.QtWidgets import (
+    QApplication,
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QScrollArea,
-    QWidget, QFrame,
+    QWidget, QFrame, QMessageBox,
 )
 from PyQt5.QtCore import Qt
 
@@ -162,23 +163,19 @@ class MyPersonalizationsDialog(QDialog):
             )
             lay.addWidget(b_lbl)
 
-        # acción ir a ubicación
-        if self._on_navigate:
-            go_btn = QPushButton("Ir")
-            go_btn.setFixedSize(S(40), S(26))
-            go_btn.setToolTip("Navegar a la carpeta")
-            go_btn.setStyleSheet(
-                f"QPushButton {{ background:{T['overlay']}; color:{T['text_sub']};"
-                f"border:none; border-radius:{S(5)}px; font-size:{S(11)}px; }}"
-                f"QPushButton:hover {{ background:{T['accent']}; color:{T['bg']}; }}"
-            )
-            _p = path
-            go_btn.clicked.connect(
-                lambda _, p=_p: (
-                    self._on_navigate(str(Path(p).parent)), self.accept()
-                )
-            )
-            lay.addWidget(go_btn)
+        # acción copiar ruta
+        copy_btn = QPushButton("Copiar ruta")
+        copy_btn.setMinimumHeight(S(26))
+        copy_btn.setToolTip("Copiar la ruta completa al portapapeles")
+        copy_btn.setStyleSheet(
+            f"QPushButton {{ background:{T['overlay']}; color:{T['text_sub']};"
+            f"border:none; border-radius:{S(5)}px; font-size:{S(11)}px;"
+            f"padding:0 {S(10)}px; }}"
+            f"QPushButton:hover {{ background:{T['accent']}; color:{T['bg']}; }}"
+        )
+        _p = path
+        copy_btn.clicked.connect(lambda _, p=_p: self._copy_path(p))
+        lay.addWidget(copy_btn)
 
         # limpiar
         del_btn = QPushButton("×")
@@ -200,6 +197,16 @@ class MyPersonalizationsDialog(QDialog):
     def _remove(self, path: str):
         self._p.clear(path)
         self._refresh()
+
+    def _copy_path(self, path: str):
+        app = QApplication.instance()
+        if app:
+            app.clipboard().setText(path)
+            QMessageBox.information(
+                self,
+                "Ruta copiada",
+                f"Se copió la ruta al portapapeles:\n{path}",
+            )
 
     def _clear_all(self):
         for path, _ in self._p.all_personalized():
