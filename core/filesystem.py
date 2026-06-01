@@ -37,6 +37,12 @@ class FileSystem:
         return str(Path.home())
 
     def get_root(self):
-        # retorna la raíz del sistema de archivos de Linux
-        # equivale a "cd /" en Linux
+        # Retorna la raíz del sistema de archivos.
+        # En Windows devuelve la unidad actual (ej: 'C:\\'), en POSIX '/'.
+        try:
+            anchor = Path(self.current_path).anchor
+            if anchor:
+                return str(anchor)
+        except Exception:
+            pass
         return "/"
