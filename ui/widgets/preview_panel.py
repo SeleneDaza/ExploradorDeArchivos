@@ -78,6 +78,7 @@ _CODE  = {
     ".json", ".yaml", ".yml", ".toml", ".xml", ".md",
 }
 _TEXT  = {".txt", ".log", ".csv", ".ini", ".cfg", ".conf", ".env", ".gitignore"}
+_WORD  = {".docx", ".odt"}
 
 
 def _file_type(path: str) -> str:
@@ -88,6 +89,7 @@ def _file_type(path: str) -> str:
     if ext in _PDF:   return "pdf"
     if ext in _CODE:  return "code"
     if ext in _TEXT:  return "text"
+    if ext in _WORD:  return "word"
     try:
         with open(path, "rb") as f:
             if b"\x00" not in f.read(512):
@@ -201,6 +203,8 @@ class _FileLoader(QThread):
                 self._pdf(path, out)
             elif ftype in ("text", "code"):
                 self._text(path, out)
+            elif ftype == "word":
+                self._word(path, out)
             elif ftype == "video":
                 self._video(path, out)
             elif ftype == "audio":
@@ -248,6 +252,36 @@ class _FileLoader(QThread):
             out["line_count"] = total
             out["word_count"] = sum(len(l.split()) for l in lines)
             out["lang"]       = _lang(path)
+        except Exception as e:
+            out["error"] = str(e)
+
+    def _word(self, path, out):
+        ext = Path(path).suffix.lower()
+        try:
+            if ext == ".docx":
+                import docx
+                doc = docx.Document(path)
+                paras = [p.text for p in doc.paragraphs if p.text.strip()]
+            elif ext == ".odt":
+                import zipfile, xml.etree.ElementTree as ET
+                with zipfile.ZipFile(path) as z:
+                    tree = ET.fromstring(z.read("content.xml"))
+                ns = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+                paras = [
+                    "".join(n.text or "" for n in el.iter())
+                    for el in tree.iter(f"{{{ns}}}p")
+                    if "".join(n.text or "" for n in el.iter()).strip()
+                ]
+            else:
+                out["error"] = "Formato no soportado"
+                return
+            lines = [p + "\n" for p in paras[:self._MAX_LINES]]
+            out["lines"]      = lines
+            out["line_count"] = len(paras)
+            out["word_count"] = sum(len(p.split()) for p in paras)
+            out["lang"]       = "generic"
+        except ImportError:
+            out["error"] = "Instala python-docx para vista previa:\n pip install python-docx"
         except Exception as e:
             out["error"] = str(e)
 
@@ -777,6 +811,7 @@ class PreviewPanel(QWidget):
             "pdf":     ("PDF", "#d93a3a"),
             "code":    ("COD", "#4fa4f8"),
             "text":    ("TXT", "#5244cc"),
+            "word":    ("DOC", "#2b5797"),
             "unknown": ("???", "#9898ba"),
         }
         ftype = d.get("ftype", "unknown")
@@ -802,7 +837,7 @@ class PreviewPanel(QWidget):
 
         if ftype == "image":   self._render_image(d)
         elif ftype == "pdf":   self._render_pdf(d)
-        elif ftype in ("text", "code"): self._render_text(d)
+        elif ftype in ("text", "code", "word"): self._render_text(d)
         elif ftype == "video": self._render_video(d)
         elif ftype == "audio": self._render_audio(d)
         else:
