@@ -37,6 +37,11 @@ class FileItemDelegate(QStyledItemDelegate):
     # ── paint principal ───────────────────────────────────────
 
     def paint(self, painter: QPainter, option, index):
+        # solo dibujar indicadores en la columna del nombre
+        if index.column() != 0:
+            super().paint(painter, option, index)
+            return
+
         path   = self._path(index)
         p_data = self._p.get(path) if path else {}
 
