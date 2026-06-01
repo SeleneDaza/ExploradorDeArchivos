@@ -1,9 +1,37 @@
 import os
+import sys
 import shutil
+import subprocess
 from pathlib import Path
 
 
 class Operations:
+
+    def sudo_run(self, cmd: list[str], password: str) -> dict:
+        """Ejecuta cmd con sudo -S en Linux, pasando la contraseña por stdin."""
+        if sys.platform != "linux":
+            return {"ok": False, "error": "Elevación de privilegios solo disponible en Linux"}
+        try:
+            r = subprocess.run(
+                ["sudo", "-S", "--"] + cmd,
+                input=password + "\n",
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if r.returncode == 0:
+                return {"ok": True, "result": "Operación completada con privilegios de administrador"}
+            stderr = r.stderr.lower()
+            if any(x in stderr for x in ("incorrect password", "wrong password",
+                                          "authentication failure", "no password")):
+                return {"ok": False, "error": "Contraseña incorrecta"}
+            return {"ok": False, "error": (r.stderr.strip() or "Error al ejecutar con sudo")}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "Tiempo de espera agotado"}
+        except FileNotFoundError:
+            return {"ok": False, "error": "sudo no encontrado en el sistema"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def copy(self, source: str, destination: str) -> dict:
         src = Path(source)
@@ -27,7 +55,8 @@ class Operations:
             return {"ok": True, "result": str(dst)}
 
         except PermissionError:
-            return {"ok": False, "error": "Permiso denegado"}
+            cmd = ["cp", "-r", str(src), str(dst)] if src.is_dir() else ["cp", str(src), str(dst)]
+            return {"ok": False, "error": "Permiso denegado", "needs_sudo": True, "sudo_cmd": cmd}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -49,7 +78,8 @@ class Operations:
             return {"ok": True, "result": str(dst)}
 
         except PermissionError:
-            return {"ok": False, "error": "Permiso denegado"}
+            return {"ok": False, "error": "Permiso denegado", "needs_sudo": True,
+                    "sudo_cmd": ["mv", str(src), str(dst)]}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -75,7 +105,8 @@ class Operations:
             return {"ok": True, "result": str(dst)}
 
         except PermissionError:
-            return {"ok": False, "error": "Permiso denegado"}
+            return {"ok": False, "error": "Permiso denegado", "needs_sudo": True,
+                    "sudo_cmd": ["mv", str(src), str(dst)]}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -94,7 +125,8 @@ class Operations:
             return {"ok": True, "result": f"Eliminado: {target.name}"}
 
         except PermissionError:
-            return {"ok": False, "error": "Permiso denegado"}
+            cmd = ["rm", "-rf", str(target)] if target.is_dir() else ["rm", str(target)]
+            return {"ok": False, "error": "Permiso denegado", "needs_sudo": True, "sudo_cmd": cmd}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -115,7 +147,8 @@ class Operations:
             return {"ok": True, "result": str(target)}
 
         except PermissionError:
-            return {"ok": False, "error": "Permiso denegado"}
+            return {"ok": False, "error": "Permiso denegado", "needs_sudo": True,
+                    "sudo_cmd": ["mkdir", str(target)]}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -136,6 +169,7 @@ class Operations:
             return {"ok": True, "result": str(target)}
 
         except PermissionError:
-            return {"ok": False, "error": "Permiso denegado"}
+            return {"ok": False, "error": "Permiso denegado", "needs_sudo": True,
+                    "sudo_cmd": ["touch", str(target)]}
         except Exception as e:
             return {"ok": False, "error": str(e)}

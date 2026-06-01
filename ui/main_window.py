@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 from pathlib import Path
 
@@ -468,6 +469,26 @@ class MainWindow(QMainWindow):
         PropertiesDialog(path, parent=self).exec_()
 
     def _show_result(self, result: dict):
+        if result["ok"]:
+            self.status.showMessage(f"   {result['result']}")
+        elif result.get("needs_sudo") and sys.platform == "linux":
+            self._retry_with_sudo(result)
+        else:
+            QMessageBox.warning(self, "Error", result["error"])
+
+    def _retry_with_sudo(self, failed: dict):
+        from ui.dialogs.name_dialog import NameDialog
+        pwd, ok = NameDialog.ask(
+            self,
+            "Se requieren permisos de administrador",
+            "Contraseña de sudo:",
+            confirm_text="Ejecutar",
+            T=self.current_theme,
+            password=True,
+        )
+        if not ok or not pwd:
+            return
+        result = self.ops.sudo_run(failed["sudo_cmd"], pwd)
         if result["ok"]:
             self.status.showMessage(f"   {result['result']}")
         else:

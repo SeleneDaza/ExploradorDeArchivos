@@ -2,7 +2,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView,
     QSplitter, QPushButton, QLabel, QFileSystemModel, QHeaderView,
 )
-from PyQt5.QtCore import Qt, QDir, QModelIndex, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, QDir, QModelIndex, pyqtSignal, QSize, QRect
+from PyQt5.QtGui import QPainter, QColor, QLinearGradient
 
 from ui.theme import DARK, S
 from core.personalizer import COLORS
@@ -17,6 +18,38 @@ class _SpanishFSModel(QFileSystemModel):
             if 0 <= section < len(self._HEADERS):
                 return self._HEADERS[section]
         return super().headerData(section, orientation, role)
+
+
+class _HeatLegend(QWidget):
+    """Barra de degradado verde→amarillo→naranja→rojo con etiquetas."""
+    _STOPS = [(0.00, (100,210,120)), (0.40, (230,215,75)),
+              (0.70, (240,148,54)),  (1.00, (228,82,82))]
+    _LABELS = [("Pequeño", 0.0), ("Medio", 0.4), ("Grande", 0.75), ("Muy grande", 1.0)]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(200, 20)
+        self.setToolTip("Mapa de calor: verde = archivos pequeños, rojo = muy grandes")
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        w, h = self.width(), self.height()
+        bar_h = 6
+        bar_y = (h - bar_h) // 2
+
+        grad = QLinearGradient(0, 0, w, 0)
+        for t, (r, g, b) in self._STOPS:
+            grad.setColorAt(t, QColor(r, g, b))
+        p.setPen(Qt.NoPen)
+        p.setBrush(grad)
+        p.drawRoundedRect(QRect(0, bar_y, w, bar_h), 3, 3)
+
+        p.setPen(QColor(150, 150, 170))
+        f = p.font(); f.setPointSize(7); p.setFont(f)
+        for label, t in self._LABELS:
+            x = int(t * (w - 1))
+            p.drawLine(x, bar_y - 1, x, bar_y + bar_h + 1)
 
 
 class FileTree(QWidget):
@@ -68,6 +101,7 @@ class FileTree(QWidget):
         self.list_model = _SpanishFSModel()
         self.list_model.setRootPath(self.fs.get_home())
         self.list_model.setFilter(QDir.AllEntries | QDir.NoDotAndDotDot)
+        self.list_model.directoryLoaded.connect(lambda _: self._update_size_range())
 
         # vista detalle (columnas)
         self.list_view = QTreeView()
@@ -162,6 +196,8 @@ class FileTree(QWidget):
         lay.addWidget(self._clear_filter_btn)
 
         lay.addStretch()
+        self._heat_legend = _HeatLegend()
+        lay.addWidget(self._heat_legend)
         self._apply_filter_theme(bar, self._T)
         return bar
 
@@ -210,6 +246,22 @@ class FileTree(QWidget):
 
     # ── navegación ────────────────────────────────────────────
 
+    def _update_size_range(self):
+        if not self._delegate:
+            return
+        root_idx = self.list_view.rootIndex()
+        sizes = []
+        for row in range(self.list_model.rowCount(root_idx)):
+            idx = self.list_model.index(row, 0, root_idx)
+            info = self.list_model.fileInfo(idx)
+            if info.isFile():
+                sizes.append(info.size())
+        self._delegate.set_size_range(
+            min(sizes) if sizes else 0,
+            max(sizes) if sizes else 0,
+        )
+        self.list_view.viewport().update()
+
     def navigate_to(self, path: str):
         if self.fs.navigate_to(path):
             self.list_view.setRootIndex(self.list_model.index(path))
@@ -221,6 +273,7 @@ class FileTree(QWidget):
             self.tree_view.expand(tree_index)
 
             self.path_changed.emit(path)
+            self._update_size_range()
 
     def _on_tree_clicked(self, index: QModelIndex):
         self.navigate_to(self.tree_model.filePath(index))

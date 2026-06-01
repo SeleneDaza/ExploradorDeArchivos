@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton,
 )
+
 from PyQt5.QtCore import Qt
 from ui.theme import global_qss, btn_qss, input_qss, S
 
@@ -18,6 +19,7 @@ class NameDialog(QDialog):
                  placeholder: str = "",
                  T: dict = None,
                  confirm_only: bool = False,
+                 password: bool = False,
                  parent=None):
         super().__init__(parent, Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         self.setWindowTitle(title)
@@ -29,6 +31,7 @@ class NameDialog(QDialog):
             self.setStyleSheet(global_qss(T))
         self._T            = T or {}
         self._confirm_only = confirm_only
+        self._password     = password
         self._result: str  = ""
         self._build(label, confirm_text, initial, placeholder)
 
@@ -54,6 +57,8 @@ class NameDialog(QDialog):
         self._input.setFixedHeight(S(38))
         if T:
             self._input.setStyleSheet(input_qss(T))
+        if self._password:
+            self._input.setEchoMode(QLineEdit.Password)
         if initial:
             self._input.selectAll()
         self._input.returnPressed.connect(self._accept)
@@ -105,12 +110,10 @@ class NameDialog(QDialog):
             confirm_text: str = "Aceptar",
             initial: str = "",
             placeholder: str = "",
-            T: dict = None) -> tuple[str, bool]:
-        """
-        Muestra el diálogo y retorna (texto, ok).
-        Compatibilidad directa con QInputDialog.getText.
-        """
+            T: dict = None,
+            password: bool = False) -> tuple[str, bool]:
+        """Muestra el diálogo y retorna (texto, ok)."""
         dlg = NameDialog(title, label, confirm_text,
-                         initial, placeholder, T, parent=parent)
+                         initial, placeholder, T, password=password, parent=parent)
         ok = dlg.exec_() == QDialog.Accepted
         return dlg.value(), ok

@@ -2,11 +2,46 @@
 Delegado visual que superpone color e insignia sobre cada ítem
 del QListView sin reemplazar el ícono del sistema de archivos.
 """
-from PyQt5.QtWidgets import QStyledItemDelegate
+from PyQt5.QtWidgets import QStyledItemDelegate, QToolTip, QStyle
 from PyQt5.QtGui import QPainter, QColor, QPen, QFont
-from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtCore import Qt, QRect, QEvent
 
 from core.personalizer import Personalizer, COLORS, BADGES, _BADGE_COLORS
+
+# ── heat map ──────────────────────────────────────────────────
+
+_HEAT = [
+    (0.00, (100, 210, 120)),
+    (0.40, (230, 215,  75)),
+    (0.70, (240, 148,  54)),
+    (1.00, (228,  82,  82)),
+]
+
+
+def _heat_color(t: float) -> QColor:
+    t = max(0.0, min(1.0, t))
+    for i in range(len(_HEAT) - 1):
+        t0, c0 = _HEAT[i]
+        t1, c1 = _HEAT[i + 1]
+        if t <= t1:
+            f = (t - t0) / (t1 - t0)
+            return QColor(
+                int(c0[0] + f * (c1[0] - c0[0])),
+                int(c0[1] + f * (c1[1] - c0[1])),
+                int(c0[2] + f * (c1[2] - c0[2])),
+            )
+    return QColor(*_HEAT[-1][1])
+
+
+def _fmt_size(b: int) -> str:
+    if b < 1024:       return f"{b} B"
+    b /= 1024
+    if b < 1024:       return f"{b:.1f} KB"
+    b /= 1024
+    if b < 1024:       return f"{b:.1f} MB"
+    b /= 1024
+    if b < 1024:       return f"{b:.2f} GB"
+    return f"{b / 1024:.2f} TB"
 
 
 class FileItemDelegate(QStyledItemDelegate):
@@ -15,11 +50,33 @@ class FileItemDelegate(QStyledItemDelegate):
         self._p          = Personalizer()
         self._src        = source_model   # QFileSystemModel original
         self._filter_color: str | None = None
+        self._min_size: int = 0
+        self._max_size: int = 0
 
     # ── filtro activo ─────────────────────────────────────────
 
     def set_filter(self, color_key: str | None):
         self._filter_color = color_key
+
+    # ── heat map: rango de tamaños ────────────────────────────
+
+    def set_size_range(self, min_size: int, max_size: int):
+        self._min_size = min_size
+        self._max_size = max_size
+
+    def _size_bytes(self, index) -> int:
+        try:
+            col0 = index.sibling(index.row(), 0)
+            m = index.model()
+            if hasattr(m, "fileInfo"):
+                info = m.fileInfo(col0)
+            elif hasattr(m, "mapToSource"):
+                info = self._src.fileInfo(m.mapToSource(col0))
+            else:
+                return -1
+            return info.size() if info.isFile() else -1
+        except Exception:
+            return -1
 
     # ── path desde índice (soporta proxy) ─────────────────────
 
@@ -37,6 +94,10 @@ class FileItemDelegate(QStyledItemDelegate):
     # ── paint principal ───────────────────────────────────────
 
     def paint(self, painter: QPainter, option, index):
+        if index.column() == 1:
+            self._paint_size_cell(painter, option, index)
+            return
+
         # solo dibujar indicadores en la columna del nombre
         if index.column() != 0:
             super().paint(painter, option, index)
@@ -106,6 +167,55 @@ class FileItemDelegate(QStyledItemDelegate):
             painter.setPen(QColor("#ffffff"))
             painter.drawText(QRect(cx - r, cy - r, r * 2, r * 2),
                              Qt.AlignCenter, sym)
+
+    # ── heat map: celda de tamaño ────────────────────────────
+
+    def _paint_size_cell(self, painter: QPainter, option, index):
+        size_b = self._size_bytes(index)
+        selected = bool(option.state & QStyle.State_Selected)
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = option.rect
+
+        if selected:
+            painter.fillRect(rect, option.palette.highlight())
+
+        if size_b >= 0:
+            if self._max_size > self._min_size:
+                t = (size_b - self._min_size) / (self._max_size - self._min_size)
+            else:
+                t = 0.0
+            color = _heat_color(t)
+            color.setAlpha(80 if selected else 200)
+            inner = rect.adjusted(3, 3, -3, -3)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(color)
+            painter.drawRoundedRect(inner, 5, 5)
+
+        text = index.data(Qt.DisplayRole) or ""
+        if selected:
+            painter.setPen(option.palette.highlightedText().color())
+        else:
+            painter.setPen(QColor("#1a1a2e") if size_b >= 0 else QColor("#707090"))
+        f = QFont(option.font)
+        f.setPointSize(max(8, f.pointSize()))
+        painter.setFont(f)
+        painter.drawText(rect, Qt.AlignCenter, text)
+        painter.restore()
+
+    def helpEvent(self, event, view, option, index):
+        if index.column() == 1 and event.type() == QEvent.ToolTip:
+            size_b = self._size_bytes(index)
+            if size_b >= 0 and self._max_size > 0:
+                pct = int(size_b / self._max_size * 100)
+                QToolTip.showText(
+                    event.globalPos(),
+                    f"Tamaño: {_fmt_size(size_b)}\n{pct}% del máximo de esta carpeta",
+                    view,
+                )
+                return True
+        return super().helpEvent(event, view, option, index)
 
     # ── vista iconos ──────────────────────────────────────────
 
