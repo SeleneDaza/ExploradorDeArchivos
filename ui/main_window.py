@@ -304,6 +304,7 @@ class MainWindow(QMainWindow):
             if Path(selected).is_file():
 
                 menu.addSeparator()
+            menu.addAction("Copiar ruta", lambda: self._copy_path(selected))
             menu.addAction("Etiquetas personalizadas", lambda: self._personalize(selected))
             menu.addSeparator()
             menu.addAction("Renombrar       F2",  lambda: self._rename(selected))
@@ -446,6 +447,13 @@ class MainWindow(QMainWindow):
         dlg._btn_ok.setStyleSheet(btn_qss(self.current_theme, "danger"))
         if dlg.exec_() == QDialog.Accepted:
             self._show_result(self.ops.delete(path))
+
+    def _copy_path(self, path: str):
+        """Copiar la ruta completa al portapapeles y mostrar mensaje de estado."""
+        app = QApplication.instance()
+        if app:
+            app.clipboard().setText(path)
+            self.status.showMessage(f"   Ruta copiada: {path}")
 
     def _personalize(self, path: str):
         from ui.dialogs.personalize_dialog import PersonalizeDialog
