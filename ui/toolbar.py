@@ -45,7 +45,7 @@ class Toolbar(QWidget):
         self._all_btns:  list[QPushButton] = []
         self._seps:      list[QFrame]      = []
         self._icon_btns: dict[QPushButton, str] = {}   # btn → nombre de ícono
-        self.setFixedHeight(52)
+        self.setFixedHeight(58)
         self._build(on_up, on_home, on_root, on_new_folder, on_new_file,
                     on_back, on_forward, on_toggle_theme, on_toggle_preview)
         self._apply_theme(_T)
@@ -68,7 +68,7 @@ class Toolbar(QWidget):
             if label:
                 b.setText(f"  {label}")
             b.setToolTip(tip)
-            b.setFixedHeight(34)
+            b.setFixedHeight(38)
             if fixed_w:
                 b.setFixedWidth(fixed_w)
             b.setCursor(Qt.PointingHandCursor)

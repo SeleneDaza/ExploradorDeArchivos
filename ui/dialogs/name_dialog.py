@@ -17,6 +17,7 @@ class NameDialog(QDialog):
                  initial: str = "",
                  placeholder: str = "",
                  T: dict = None,
+                 confirm_only: bool = False,
                  parent=None):
         super().__init__(parent, Qt.Dialog | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         self.setWindowTitle(title)
@@ -26,9 +27,9 @@ class NameDialog(QDialog):
 
         if T:
             self.setStyleSheet(global_qss(T))
-        self._T = T or {}
-
-        self._result: str = ""
+        self._T            = T or {}
+        self._confirm_only = confirm_only
+        self._result: str  = ""
         self._build(label, confirm_text, initial, placeholder)
 
     # ── construcción ─────────────────────────────────────────
@@ -85,6 +86,10 @@ class NameDialog(QDialog):
     # ── lógica ────────────────────────────────────────────────
 
     def _accept(self):
+        if self._confirm_only:
+            self._result = "confirm"
+            self.accept()
+            return
         text = self._input.text().strip()
         if text:
             self._result = text

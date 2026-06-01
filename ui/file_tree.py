@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QTreeView, QListView,
+    QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QListView,
     QSplitter, QPushButton, QLabel, QFileSystemModel,
 )
 from PyQt5.QtCore import Qt, QDir, QModelIndex, pyqtSignal, QSize
@@ -35,7 +35,7 @@ class FileTree(QWidget):
 
         splitter = QSplitter(Qt.Horizontal)
 
-        # ── sidebar: árbol de directorios ──────────────────────
+        # ── árbol de directorios ──────────────────────────────
         self.tree_model = QFileSystemModel()
         self.tree_model.setRootPath(self.fs.get_root())
         self.tree_model.setFilter(QDir.AllDirs | QDir.NoDotAndDotDot)
@@ -47,10 +47,12 @@ class FileTree(QWidget):
         self.tree_view.hideColumn(2)
         self.tree_view.hideColumn(3)
         self.tree_view.setHeaderHidden(True)
-        self.tree_view.setMinimumWidth(200)
+        self.tree_view.setMinimumWidth(180)
         self.tree_view.clicked.connect(self._on_tree_clicked)
 
-        # ── panel derecho: barra de orden + lista ───────────────
+        splitter.addWidget(self.tree_view)
+
+        # ── lista de archivos ─────────────────────────────────
         right = QWidget()
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -69,14 +71,11 @@ class FileTree(QWidget):
         self.list_view.doubleClicked.connect(self._on_list_double_clicked)
         self._apply_view_mode()
 
-        # delegate de personalización visual
         from ui.delegates.file_delegate import FileItemDelegate
         self._delegate = FileItemDelegate(self.list_model, self.list_view)
         self.list_view.setItemDelegate(self._delegate)
 
         rl.addWidget(self.list_view)
-
-        splitter.addWidget(self.tree_view)
         splitter.addWidget(right)
         splitter.setSizes([220, 680])
 
@@ -84,9 +83,9 @@ class FileTree(QWidget):
 
     def _make_sort_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setFixedHeight(36)
+        bar.setFixedHeight(40)
         lay = QHBoxLayout(bar)
-        lay.setContentsMargins(10, 4, 10, 4)
+        lay.setContentsMargins(10, 5, 10, 5)
         lay.setSpacing(6)
 
         self._sort_lbl = QLabel("Ordenar:")
@@ -94,7 +93,7 @@ class FileTree(QWidget):
 
         for i, name in enumerate(_SORT_LABELS):
             b = QPushButton(name)
-            b.setFixedHeight(26)
+            b.setFixedHeight(28)
             b.setCheckable(True)
             b.clicked.connect(lambda _, col=i: self._sort_by(col))
             lay.addWidget(b)
@@ -165,13 +164,13 @@ class FileTree(QWidget):
             f"background:{T['surface']}; border-bottom:1px solid {T['border']};"
         )
         self._sort_lbl.setStyleSheet(
-            f"color:{T['text_dim']}; font-size:12px; background:transparent;"
+            f"color:{T['text_dim']}; font-size:13px; background:transparent;"
         )
         sort_style = f"""
             QPushButton {{
                 background: transparent; color: {T['text_sub']};
-                border: none; font-size: 12px;
-                padding: 0 8px; border-radius: 4px;
+                border: none; font-size: 13px;
+                padding: 0 10px; border-radius: 4px;
             }}
             QPushButton:hover {{ background: {T['overlay']}; color: {T['text']}; }}
             QPushButton:checked {{
@@ -202,8 +201,8 @@ class FileTree(QWidget):
             self.list_view.setViewMode(QListView.IconMode)
             self.list_view.setMovement(QListView.Static)      # evita drag; habilita click
             self.list_view.setResizeMode(QListView.Adjust)
-            self.list_view.setIconSize(QSize(S(56), S(56)))
-            self.list_view.setGridSize(QSize(S(96), S(86)))
+            self.list_view.setIconSize(QSize(S(64), S(64)))
+            self.list_view.setGridSize(QSize(S(108), S(98)))
             self.list_view.setWordWrap(True)
             self.list_view.setUniformItemSizes(True)
             self.list_view.setSpacing(S(4))
@@ -211,7 +210,7 @@ class FileTree(QWidget):
             self.list_view.setViewMode(QListView.ListMode)
             self.list_view.setMovement(QListView.Static)
             self.list_view.setResizeMode(QListView.Fixed)
-            self.list_view.setIconSize(QSize(S(20), S(20)))
+            self.list_view.setIconSize(QSize(S(22), S(22)))
             self.list_view.setGridSize(QSize())
             self.list_view.setWordWrap(False)
             self.list_view.setUniformItemSizes(False)
@@ -285,6 +284,9 @@ class FileTree(QWidget):
             order = Qt.AscendingOrder if self._sort_asc else Qt.DescendingOrder
             self.list_model.sort(self._sort_col, order)
 
+    def _on_tree_clicked(self, index: QModelIndex):
+        self.navigate_to(self.tree_model.filePath(index))
+
     def get_selected_path(self) -> str | None:
         index = self.list_view.currentIndex()
         if index.isValid():
@@ -293,9 +295,6 @@ class FileTree(QWidget):
 
     def get_selected_paths(self) -> list[str]:
         return [self.list_model.filePath(i) for i in self.list_view.selectedIndexes()]
-
-    def _on_tree_clicked(self, index: QModelIndex):
-        self.navigate_to(self.tree_model.filePath(index))
 
     def _on_list_double_clicked(self, index: QModelIndex):
         path = self.list_model.filePath(index)

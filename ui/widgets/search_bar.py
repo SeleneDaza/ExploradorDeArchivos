@@ -11,7 +11,7 @@ class SearchBar(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setFixedHeight(S(52))
+        self.setFixedHeight(S(56))
         self._build()
         self.set_theme(_T)
 
@@ -22,7 +22,7 @@ class SearchBar(QWidget):
 
         self.input = QLineEdit()
         self.input.setPlaceholderText("Buscar por nombre o extensión...   Ctrl+F")
-        self.input.setFixedHeight(S(36))
+        self.input.setFixedHeight(S(40))
         self.input.returnPressed.connect(self._on_search)
         self.input.textChanged.connect(self._on_changed)
 
@@ -45,7 +45,7 @@ class SearchBar(QWidget):
             QLineEdit {{
                 background: {T['panel']}; color: {T['text']};
                 border: 1.5px solid {T['border']}; border-radius: {S(18)}px;
-                font-family: "{FONT_UI}"; font-size: {S(14)}px;
+                font-family: "{FONT_UI}"; font-size: {S(15)}px;
                 padding: {S(4)}px {S(16)}px;
                 selection-background-color: {T['accent']}; selection-color: {T['bg']};
             }}
@@ -65,8 +65,8 @@ class SearchBar(QWidget):
         """)
 
     def update_zoom(self):
-        self.setFixedHeight(S(52))
-        self.input.setFixedHeight(S(36))
+        self.setFixedHeight(S(56))
+        self.input.setFixedHeight(S(40))
         self._btn_clear.setFixedSize(S(28), S(28))
 
     def _on_search(self):

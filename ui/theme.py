@@ -129,15 +129,15 @@ QTreeView, QListView {{
     background: {T['surface']};
     color: {T['text']};
     border: none;
-    font-size: {S(13)}px;
+    font-size: {S(15)}px;
     outline: none;
     show-decoration-selected: 1;
-    padding: {S(3)}px;
+    padding: {S(4)}px;
 }}
 QTreeView::item, QListView::item {{
-    padding: {S(5)}px {S(9)}px;
+    padding: {S(7)}px {S(12)}px;
     border-radius: {S(7)}px;
-    min-height: {S(26)}px;
+    min-height: {S(32)}px;
 }}
 QTreeView::item:hover:!selected, QListView::item:hover:!selected {{
     background: {T['overlay']};
@@ -179,10 +179,10 @@ QMenu {{
     padding: {S(6)}px {S(4)}px;
 }}
 QMenu::item {{
-    padding: {S(9)}px {S(28)}px;
+    padding: {S(10)}px {S(28)}px;
     border-radius: {S(8)}px;
-    font-size: {S(14)}px;
-    margin: {S(1)}px {S(4)}px;
+    font-size: {S(15)}px;
+    margin: {S(2)}px {S(4)}px;
 }}
 QMenu::item:selected {{ background: {T['overlay']}; color: {T['text']}; }}
 QMenu::separator {{
@@ -258,10 +258,10 @@ QSplitter::handle {{ background: {T['border']}; width: 1px; height: 1px; }}
 QStatusBar {{
     background: {T['surface']};
     color: {T['text_dim']};
-    font-size: {S(12)}px;
-    padding: 0 {S(8)}px;
+    font-size: {S(13)}px;
+    padding: 0 {S(10)}px;
     border-top: 1px solid {T['border']};
-    min-height: {S(28)}px;
+    min-height: {S(30)}px;
 }}
 QStatusBar::item {{ border: none; }}
 
@@ -311,10 +311,10 @@ def btn_qss(T: dict, variant: str = "default") -> str:
     return f"""
 QPushButton {{
     background: {bg}; color: {fg};
-    border: none; border-radius: {S(7)}px;
-    font-family: "{FONT_UI}"; font-size: {S(13)}px;
-    padding: {S(5)}px {S(14)}px;
-    min-height: {S(30)}px;
+    border: none; border-radius: {S(8)}px;
+    font-family: "{FONT_UI}"; font-size: {S(14)}px;
+    padding: {S(6)}px {S(18)}px;
+    min-height: {S(36)}px;
 }}
 QPushButton:hover    {{ background: {hbg}; color: {hfg}; }}
 QPushButton:pressed  {{ background: {T['accent2']}; color: {T['bg']}; }}
@@ -361,4 +361,4 @@ def apply_palette(app, T: dict):
     p.setColor(QPalette.ToolTipText,     QColor(T["text_sub"]))
     p.setColor(QPalette.PlaceholderText, QColor(T["text_dim"]))
     app.setPalette(p)
-    app.setFont(QFont(FONT_UI, S(10)))
+    app.setFont(QFont(FONT_UI, S(12)))

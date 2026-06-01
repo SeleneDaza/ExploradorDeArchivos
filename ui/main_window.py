@@ -16,7 +16,6 @@ from core.filesystem import FileSystem
 from core.operations import Operations
 from ui.toolbar import Toolbar
 from ui.file_tree import FileTree
-from ui.widgets.favorites_panel import FavoritesPanel
 from ui.widgets.search_bar import SearchBar
 from ui.widgets.preview_panel import PreviewPanel
 
@@ -84,12 +83,8 @@ class MainWindow(QMainWindow):
         self._main_sep = sep
         root.addWidget(sep)
 
-        # splitter: favoritos | árbol | vista previa
+        # splitter: lista | vista previa
         self._splitter = QSplitter(Qt.Horizontal)
-
-        self.favorites = FavoritesPanel()
-        self.favorites.path_selected.connect(self._on_favorite_selected)
-        self._splitter.addWidget(self.favorites)
 
         self.file_tree = FileTree(self.fs)
         self.file_tree.path_changed.connect(self._on_path_changed)
@@ -105,12 +100,10 @@ class MainWindow(QMainWindow):
         self.preview = PreviewPanel()
         self.preview.request_search.connect(lambda p: self._on_search(Path(p).name))
         self.preview.request_trace.connect(self._start_trace)
-        self.preview.request_favorite.connect(lambda p: self.favorites.add_favorite(p))
-        self.preview.request_unfavorite.connect(lambda p: self.favorites.remove_favorite(p))
         self.preview.request_location.connect(self._navigate)
         self._splitter.addWidget(self.preview)
 
-        self._splitter.setSizes([186, 620, 300])
+        self._splitter.setSizes([820, 300])
         root.addWidget(self._splitter, 1)
 
         self.status = QStatusBar()
@@ -179,12 +172,6 @@ class MainWindow(QMainWindow):
 
     def _on_breadcrumb_clicked(self, path: str):
         self._navigate(path)
-
-    def _on_favorite_selected(self, path: str):
-        if path == "__add_current__":
-            self.favorites.add_favorite(self.fs.get_current_path())
-        else:
-            self._navigate(path)
 
     # ── búsqueda ──────────────────────────────────────────────
 
@@ -398,11 +385,11 @@ class MainWindow(QMainWindow):
             f"¿Eliminar {len(paths)} elementos seleccionados?",
             confirm_text="Eliminar",
             T=self.current_theme,
+            confirm_only=True,
             parent=self,
         )
         dlg._input.hide()
         dlg._btn_ok.setStyleSheet(btn_qss(self.current_theme, "danger"))
-        dlg._result = "confirm"
         if dlg.exec_() != QDialog.Accepted:
             return
         errors = [r["error"] for p in paths if not (r := self.ops.delete(p)).get("ok")]
@@ -419,12 +406,11 @@ class MainWindow(QMainWindow):
             f"¿Eliminar '{Path(path).name}'?",
             confirm_text="Eliminar",
             T=self.current_theme,
+            confirm_only=True,
             parent=self,
         )
-        # El diálogo de confirmación no necesita input — ocultamos el campo
         dlg._input.hide()
         dlg._btn_ok.setStyleSheet(btn_qss(self.current_theme, "danger"))
-        dlg._result = "confirm"
         if dlg.exec_() == QDialog.Accepted:
             self._show_result(self.ops.delete(path))
 
@@ -485,7 +471,6 @@ class MainWindow(QMainWindow):
         self.toolbar.set_theme(T, self._theme_idx)
         self.search_bar.set_theme(T)
         self.breadcrumb.set_theme(T)
-        self.favorites.set_theme(T)
         self.file_tree.set_theme(T)
         self.preview.set_theme(T)
         self._main_sep.setStyleSheet(f"background:{T['border']};")
@@ -499,7 +484,6 @@ class MainWindow(QMainWindow):
         self.toolbar.update_zoom(pct)
         self.search_bar.update_zoom()
         self.breadcrumb.update_zoom()
-        self.favorites.update_zoom()
         self.file_tree.update_zoom()
         self.status.showMessage(
             f"   Zoom {pct}%  —  use Ctrl+0 para restablecer"
@@ -532,7 +516,7 @@ class BreadcrumbBar(QWidget):
         super().__init__()
         self._T    = DARK
         self._path = ""
-        self.setFixedHeight(S(36))
+        self.setFixedHeight(S(38))
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(S(16), 0, S(16), 0)
         self._layout.setSpacing(S(2))
@@ -540,7 +524,7 @@ class BreadcrumbBar(QWidget):
         self.set_theme(DARK)
 
     def update_zoom(self):
-        self.setFixedHeight(S(36))
+        self.setFixedHeight(S(38))
         if self._path:
             self.set_path(self._path)
 
@@ -576,7 +560,7 @@ class BreadcrumbBar(QWidget):
             if is_last:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        color: {T['accent']}; font-weight: 700; font-size: {S(13)}px;
+                        color: {T['accent']}; font-weight: 700; font-size: {S(14)}px;
                         border: none; padding: 0 {S(6)}px; background: transparent;
                         border-radius: {S(6)}px;
                     }}
@@ -584,7 +568,7 @@ class BreadcrumbBar(QWidget):
             else:
                 btn.setStyleSheet(f"""
                     QPushButton {{
-                        color: {T['text_dim']}; font-size: {S(13)}px;
+                        color: {T['text_dim']}; font-size: {S(14)}px;
                         border: none; padding: 0 {S(6)}px; background: transparent;
                         border-radius: {S(6)}px;
                     }}
