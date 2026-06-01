@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QKeySequence, QFont, QColor, QPalette
 
-from ui.theme import DARK, LIGHT, RETRO, FONT_UI, global_qss, apply_palette, btn_qss, S, get_zoom, set_zoom, R_XS
+from ui.theme import DARK, LIGHT, RETRO, AURORA, CELESTE, FONT_UI, global_qss, apply_palette, btn_qss, S, get_zoom, set_zoom, R_XS
 from core.filesystem import FileSystem
 from core.operations import Operations
 from ui.toolbar import Toolbar
@@ -22,7 +22,7 @@ from ui.widgets.preview_panel import PreviewPanel
 from core.searcher import SearchWorker
 
 # re-exportar para main.py
-__all__ = ["MainWindow", "apply_palette", "DARK", "LIGHT"]
+__all__ = ["MainWindow", "apply_palette", "DARK", "LIGHT", "RETRO", "AURORA", "CELESTE"]
 
 
 class MainWindow(QMainWindow):
@@ -32,7 +32,7 @@ class MainWindow(QMainWindow):
         self.ops = Operations()
         self.history       = []
         self.history_index = -1
-        self._theme_idx    = 0          # 0=DARK  1=LIGHT  2=RETRO
+        self._theme_idx    = 0          # 0=DARK  1=LIGHT  2=RETRO  3=AURORA  4=CELESTE
         self.current_theme = DARK
         self._preview_anim  = None
         self._search_worker: SearchWorker | None = None
@@ -497,8 +497,8 @@ class MainWindow(QMainWindow):
     # ── tema ──────────────────────────────────────────────────
 
     def toggle_theme(self):
-        _themes = [DARK, LIGHT, RETRO]
-        self._theme_idx    = (self._theme_idx + 1) % 3
+        _themes = [DARK, LIGHT, RETRO, AURORA, CELESTE]
+        self._theme_idx    = (self._theme_idx + 1) % len(_themes)
         self.current_theme = _themes[self._theme_idx]
         self._propagate_theme()
 

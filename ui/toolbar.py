@@ -6,8 +6,8 @@ from ui.icons import tinted_icon
 _T = DARK
 
 # Ícono que se muestra en el botón de tema según el modo ACTIVO
-_THEME_ICON = ["moon", "sun", "palette"]
-_THEME_LABEL = ["Oscuro", "Claro", "Retro"]
+_THEME_ICON = ["moon", "sun", "palette", "palette", "palette"]
+_THEME_LABEL = ["Oscuro", "Claro", "Retro", "Aurora", "Celeste"]
 
 # (nombre_icono, texto_label_o_None, tooltip, argumento_slot)
 _NAV_BTNS = [
@@ -103,7 +103,7 @@ class Toolbar(QWidget):
         # Tema (ícono del modo activo)
         self._btn_theme = _btn(
             _THEME_ICON[self._theme_idx], None,
-            "Cambiar tema  (Oscuro → Claro → Retro)",
+            "Cambiar tema  (Oscuro → Claro → Retro → Aurora → Celeste)",
             on_toggle_theme, fixed_w=34,
         )
         sep()

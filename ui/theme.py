@@ -1,6 +1,7 @@
 """
 Sistema de diseño centralizado — ExploradorDeArchivos
-Paletas: DARK (Linear/VSCode), LIGHT (Notion/macOS), RETRO (pastel cálido)
+Paletas: DARK (Linear/VSCode), LIGHT (Notion/macOS), RETRO (pastel cálido),
+         AURORA (verde/teal nocturno), CELESTE (azul cielo limpio)
 Zoom:    S(n) escala cualquier valor de píxel; set_zoom() reconstruye toda la UI
 """
 import sys
@@ -105,6 +106,56 @@ RETRO = {
     "hover":    "#ecddd0",
     "toolbar":          "#e8a098",
     "scrollbar_handle": "#f0c040",
+}
+
+# ── Paleta aurora — nocturna con acentos teal ─────────────────
+
+AURORA = {
+    "bg":       "#eefbf6",
+    "surface":  "#f7fffb",
+    "panel":    "#e3f5ee",
+    "overlay":  "#d0ebe0",
+    "accent":   "#2fc79a",
+    "accent2":  "#4d86e6",
+    "accent3":  "#8ee7bb",
+    "text":     "#18312b",
+    "text_sub": "#4f766e",
+    "text_dim": "#7ba195",
+    "success":  "#2ec4a0",
+    "warning":  "#ff7a70",
+    "caution":  "#f3bb57",
+    "border":   "#c7e8db",
+    "sel_bg":   "rgba(47,199,154,0.14)",
+    "sel_text": "#0f5f48",
+    "sidebar":  "#edf8f3",
+    "hover":    "#d0ebe0",
+    "toolbar":          "#e7f6ef",
+    "scrollbar_handle": "#6fd8b0",
+}
+
+# ── Paleta celeste — clara, fresca y luminosa ─────────────────
+
+CELESTE = {
+    "bg":       "#eef4ff",
+    "surface":  "#f7faff",
+    "panel":    "#e2ebff",
+    "overlay":  "#cad8ff",
+    "accent":   "#2d5be3",
+    "accent2":  "#173fa7",
+    "accent3":  "#72aaff",
+    "text":     "#10233a",
+    "text_sub": "#46608d",
+    "text_dim": "#7790b5",
+    "success":  "#0f9d7a",
+    "warning":  "#d1495b",
+    "caution":  "#d97e2d",
+    "border":   "#bfd0f4",
+    "sel_bg":   "rgba(45,91,227,0.12)",
+    "sel_text": "#1f4fd7",
+    "sidebar":  "#edf3ff",
+    "hover":    "#d4e0ff",
+    "toolbar":          "#dfe9ff",
+    "scrollbar_handle": "#2d5be3",
 }
 
 # ── Radios de borde (tokens fijos) ────────────────────────────
